@@ -74,6 +74,32 @@ const envSchema = z.object({
   ENABLE_FILE_UPLOAD: z.string().transform(Boolean).default(true),
   ENABLE_REAL_TIME: z.string().transform(Boolean).default(true),
   ENABLE_ANALYTICS: z.string().transform(Boolean).default(true),
+
+  // Hedera Blockchain
+  HEDERA_NETWORK: z.enum(['testnet', 'mainnet']).default('testnet'),
+  HEDERA_OPERATOR_ID: z.string().optional(),
+  HEDERA_OPERATOR_PRIVATE_KEY: z.string().optional(),
+
+  // Kafka
+  KAFKA_BROKERS: z.string().default('localhost:9092'),
+  KAFKA_CLIENT_ID: z.string().default('studious-couscous'),
+  KAFKA_GROUP_ID: z.string().default('studious-couscous-consumers'),
+
+  // CRM Integration
+  SALESFORCE_CLIENT_ID: z.string().optional(),
+  SALESFORCE_CLIENT_SECRET: z.string().optional(),
+  SALESFORCE_LOGIN_URL: z.string().optional(),
+  HUBSPOT_API_KEY: z.string().optional(),
+
+  // Financial Integration
+  XERO_CLIENT_ID: z.string().optional(),
+  XERO_CLIENT_SECRET: z.string().optional(),
+  MYOB_CLIENT_ID: z.string().optional(),
+  MYOB_CLIENT_SECRET: z.string().optional(),
+
+  // AML/Compliance
+  CHAINALYSIS_API_KEY: z.string().optional(),
+  ELLIPTIC_API_KEY: z.string().optional(),
 })
 
 // Validate environment variables
@@ -160,6 +186,44 @@ export const config = {
     fileUpload: env.ENABLE_FILE_UPLOAD,
     realTime: env.ENABLE_REAL_TIME,
     analytics: env.ENABLE_ANALYTICS,
+  },
+  hedera: {
+    network: env.HEDERA_NETWORK,
+    operatorId: env.HEDERA_OPERATOR_ID,
+    operatorPrivateKey: env.HEDERA_OPERATOR_PRIVATE_KEY,
+  },
+  kafka: {
+    brokers: env.KAFKA_BROKERS.split(','),
+    clientId: env.KAFKA_CLIENT_ID,
+    groupId: env.KAFKA_GROUP_ID,
+  },
+  crm: {
+    salesforce: {
+      clientId: env.SALESFORCE_CLIENT_ID,
+      clientSecret: env.SALESFORCE_CLIENT_SECRET,
+      loginUrl: env.SALESFORCE_LOGIN_URL,
+    },
+    hubspot: {
+      apiKey: env.HUBSPOT_API_KEY,
+    },
+  },
+  finance: {
+    xero: {
+      clientId: env.XERO_CLIENT_ID,
+      clientSecret: env.XERO_CLIENT_SECRET,
+    },
+    myob: {
+      clientId: env.MYOB_CLIENT_ID,
+      clientSecret: env.MYOB_CLIENT_SECRET,
+    },
+  },
+  compliance: {
+    chainalysis: {
+      apiKey: env.CHAINALYSIS_API_KEY,
+    },
+    elliptic: {
+      apiKey: env.ELLIPTIC_API_KEY,
+    },
   },
 } as const
 

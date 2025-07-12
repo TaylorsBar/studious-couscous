@@ -30,6 +30,19 @@ model User {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  // KC Speedshop specific fields
+  companyName       String?
+  phoneNumber       String?
+  businessType      BusinessType @default(CUSTOMER)
+  creditLimit       Float?
+  paymentTerms      String?
+  taxId             String?
+  
+  // External CRM IDs for sync
+  salesforceId      String?
+  hubspotId         String?
+  crmSyncedAt       DateTime?
+
   // Relations
   ownedProjects     Project[]       @relation("ProjectOwner")
   projectMembers    ProjectMember[]
@@ -42,6 +55,14 @@ model User {
   activityLogs      ActivityLog[]
   sentMessages      Message[]       @relation("MessageSender")
   receivedMessages  Message[]       @relation("MessageReceiver")
+  
+  // Automotive specific relations
+  orders            Order[]
+  customerParts     CustomerPart[]
+  vehicles          Vehicle[]
+  quotes            Quote[]
+  invoices          Invoice[]
+  supportTickets    SupportTicket[]
 
   @@map("users")
 }
@@ -62,6 +83,12 @@ model Project {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
+  // KC Speedshop specific fields
+  projectType   ProjectType   @default(GENERAL)
+  vehicleId     String?
+  estimatedHours Float?
+  laborRate     Float?
+
   // Relations
   owner     User            @relation("ProjectOwner", fields: [ownerId], references: [id])
   ownerId   String
@@ -71,6 +98,8 @@ model Project {
   comments  Comment[]
   logs      ActivityLog[]
   teams     TeamProject[]
+  vehicle   Vehicle?        @relation(fields: [vehicleId], references: [id])
+  parts     ProjectPart[]
 
   @@map("projects")
 }
@@ -297,7 +326,371 @@ model Session {
   @@map("sessions")
 }
 
-// Enums
+// ================================
+// KC SPEEDSHOP AUTOMOTIVE MODELS
+// ================================
+
+model Manufacturer {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  logo        String?
+  website     String?
+  description String?
+  country     String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  parts    Part[]
+  vehicles Vehicle[]
+
+  @@map("manufacturers")
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  image       String?
+  parentId    String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  subcategories Category[] @relation("CategoryHierarchy")
+  parts       Part[]
+
+  @@map("categories")
+}
+
+model Part {
+  id              String      @id @default(cuid())
+  sku             String      @unique
+  name            String
+  description     String?
+  specifications  Json?
+  images          String[]
+  price           Float
+  costPrice       Float?
+  weight          Float?
+  dimensions      Json?
+  stockQuantity   Int         @default(0)
+  lowStockThreshold Int       @default(5)
+  isActive        Boolean     @default(true)
+  isFeatured      Boolean     @default(false)
+  warranty        String?
+  
+  // Performance specific fields
+  horsepower      Float?
+  torque          Float?
+  materialType    String?
+  finish          String?
+  
+  // Blockchain verification
+  isVerified      Boolean     @default(false)
+  hederaTxId      String?     // Hedera transaction ID for provenance
+  verifiedAt      DateTime?
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  manufacturer    Manufacturer @relation(fields: [manufacturerId], references: [id])
+  manufacturerId  String
+  category        Category     @relation(fields: [categoryId], references: [id])
+  categoryId      String
+  
+  // Many-to-many relations
+  orderItems      OrderItem[]
+  customerParts   CustomerPart[]
+  projectParts    ProjectPart[]
+  quoteItems      QuoteItem[]
+  compatibility   PartCompatibility[]
+
+  @@map("parts")
+}
+
+model Vehicle {
+  id           String   @id @default(cuid())
+  year         Int
+  make         String
+  model        String
+  submodel     String?
+  engine       String?
+  transmission String?
+  drivetrain   String?
+  vin          String?
+  color        String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  manufacturer   Manufacturer? @relation(fields: [manufacturerId], references: [id])
+  manufacturerId String?
+  owner          User          @relation(fields: [ownerId], references: [id])
+  ownerId        String
+  
+  projects       Project[]
+  compatibility  PartCompatibility[]
+
+  @@map("vehicles")
+}
+
+model PartCompatibility {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  // Relations
+  part      Part    @relation(fields: [partId], references: [id])
+  partId    String
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
+  vehicleId String
+
+  @@unique([partId, vehicleId])
+  @@map("part_compatibility")
+}
+
+model CustomerPart {
+  id           String   @id @default(cuid())
+  quantity     Int
+  purchasePrice Float?
+  purchaseDate DateTime?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  customer     User @relation(fields: [customerId], references: [id])
+  customerId   String
+  part         Part @relation(fields: [partId], references: [id])
+  partId       String
+
+  @@map("customer_parts")
+}
+
+model ProjectPart {
+  id           String   @id @default(cuid())
+  quantity     Int
+  unitPrice    Float?
+  laborHours   Float?
+  notes        String?
+  isInstalled  Boolean  @default(false)
+  installedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  project      Project @relation(fields: [projectId], references: [id])
+  projectId    String
+  part         Part    @relation(fields: [partId], references: [id])
+  partId       String
+
+  @@map("project_parts")
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  orderNumber     String      @unique
+  status          OrderStatus @default(PENDING)
+  subtotal        Float
+  tax             Float       @default(0)
+  shipping        Float       @default(0)
+  total           Float
+  currency        String      @default("USD")
+  
+  // Payment information
+  paymentMethod   PaymentMethod?
+  paymentStatus   PaymentStatus @default(PENDING)
+  paidAt          DateTime?
+  
+  // Crypto payment fields
+  hbarAmount      Float?
+  hbarAddress     String?
+  hbarTxId        String?
+  
+  // Shipping information
+  shippingAddress Json?
+  billingAddress  Json?
+  trackingNumber  String?
+  shippedAt       DateTime?
+  deliveredAt     DateTime?
+  
+  // Compliance flags
+  amlChecked      Boolean     @default(false)
+  riskScore       Float?
+  
+  notes           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  customer        User        @relation(fields: [customerId], references: [id])
+  customerId      String
+  items           OrderItem[]
+  invoice         Invoice?
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  quantity  Int
+  unitPrice Float
+  lineTotal Float
+  createdAt DateTime @default(now())
+
+  // Relations
+  order     Order @relation(fields: [orderId], references: [id])
+  orderId   String
+  part      Part  @relation(fields: [partId], references: [id])
+  partId    String
+
+  @@map("order_items")
+}
+
+model Quote {
+  id           String      @id @default(cuid())
+  quoteNumber  String      @unique
+  status       QuoteStatus @default(DRAFT)
+  subtotal     Float
+  tax          Float       @default(0)
+  total        Float
+  validUntil   DateTime?
+  notes        String?
+  terms        String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  // Relations
+  customer     User        @relation(fields: [customerId], references: [id])
+  customerId   String
+  items        QuoteItem[]
+
+  @@map("quotes")
+}
+
+model QuoteItem {
+  id        String   @id @default(cuid())
+  quantity  Int
+  unitPrice Float
+  lineTotal Float
+  notes     String?
+  createdAt DateTime @default(now())
+
+  // Relations
+  quote     Quote @relation(fields: [quoteId], references: [id])
+  quoteId   String
+  part      Part  @relation(fields: [partId], references: [id])
+  partId    String
+
+  @@map("quote_items")
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  invoiceNumber String        @unique
+  status        InvoiceStatus @default(DRAFT)
+  subtotal      Float
+  tax           Float         @default(0)
+  total         Float
+  dueDate       DateTime?
+  paidAt        DateTime?
+  
+  // External accounting system IDs
+  xeroId        String?
+  myobId        String?
+  syncedAt      DateTime?
+  
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  customer      User   @relation(fields: [customerId], references: [id])
+  customerId    String
+  order         Order? @relation(fields: [orderId], references: [id])
+  orderId       String? @unique
+
+  @@map("invoices")
+}
+
+model SupportTicket {
+  id          String           @id @default(cuid())
+  ticketNumber String          @unique
+  subject     String
+  description String
+  status      SupportStatus    @default(OPEN)
+  priority    Priority         @default(MEDIUM)
+  category    SupportCategory  @default(GENERAL)
+  
+  // External CRM IDs
+  salesforceId String?
+  hubspotId   String?
+  
+  resolvedAt  DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relations
+  customer    User @relation(fields: [customerId], references: [id])
+  customerId  String
+
+  @@map("support_tickets")
+}
+
+// ================================
+// HEDERA BLOCKCHAIN INTEGRATION
+// ================================
+
+model HederaTransaction {
+  id              String              @id @default(cuid())
+  transactionId   String              @unique
+  topicId         String
+  messageHash     String
+  eventType       HederaEventType
+  entityId        String              // ID of the entity being recorded
+  entityType      String              // Type of entity (part, order, etc.)
+  consensusTimestamp DateTime?
+  status          HederaTransactionStatus @default(PENDING)
+  payload         Json
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@map("hedera_transactions")
+}
+
+// ================================
+// CRM SYNC TRACKING
+// ================================
+
+model CrmSyncLog {
+  id           String          @id @default(cuid())
+  crmSystem    CrmSystem
+  operation    CrmOperation
+  entityType   String
+  entityId     String
+  externalId   String?
+  status       CrmSyncStatus   @default(PENDING)
+  errorMessage String?
+  requestData  Json?
+  responseData Json?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@map("crm_sync_logs")
+}
+
+// ================================
+// ENUMS
+// ================================
+
 enum ProjectStatus {
   ACTIVE
   ON_HOLD
@@ -358,4 +751,123 @@ enum MessageType {
   FILE
   IMAGE
   SYSTEM
+}
+
+// KC Speedshop specific enums
+enum BusinessType {
+  CUSTOMER
+  SUPPLIER
+  DEALER
+  WHOLESALER
+  MANUFACTURER
+}
+
+enum ProjectType {
+  GENERAL
+  ENGINE_BUILD
+  TURBO_INSTALL
+  SUSPENSION
+  EXHAUST
+  TUNING
+  RESTORATION
+  MAINTENANCE
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  BANK_TRANSFER
+  HBAR
+  PAYPAL
+  CASH
+  CHECK
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  VIEWED
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  VIEWED
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum SupportStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+enum SupportCategory {
+  GENERAL
+  TECHNICAL
+  BILLING
+  SHIPPING
+  RETURNS
+  WARRANTY
+}
+
+enum HederaEventType {
+  PART_REGISTERED
+  PART_VERIFIED
+  ORDER_CREATED
+  ORDER_PAID
+  ORDER_SHIPPED
+  USER_VERIFIED
+}
+
+enum HederaTransactionStatus {
+  PENDING
+  SUBMITTED
+  CONSENSUS_REACHED
+  FAILED
+}
+
+enum CrmSystem {
+  SALESFORCE
+  HUBSPOT
+}
+
+enum CrmOperation {
+  CREATE
+  UPDATE
+  DELETE
+  SYNC
+}
+
+enum CrmSyncStatus {
+  PENDING
+  IN_PROGRESS
+  SUCCESS
+  FAILED
+  SKIPPED
 }

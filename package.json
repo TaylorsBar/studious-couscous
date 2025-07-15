@@ -1,0 +1,78 @@
+{
+  "name": "karapiro-cartel",
+  "version": "1.0.0",
+  "description": "New Zealand's Premier Automotive Ecosystem - High-performance automotive management platform",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "cd client && npm run build",
+    "build:server": "cd server && npm run build",
+    "start": "cd server && npm start",
+    "test": "npm run test:server && npm run test:client",
+    "test:server": "cd server && npm test",
+    "test:client": "cd client && npm test",
+    "lint": "npm run lint:server && npm run lint:client",
+    "lint:server": "cd server && npm run lint",
+    "lint:client": "cd client && npm run lint",
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "db:setup": "cd server && npm run db:setup",
+    "db:seed": "cd server && npm run db:seed",
+    "db:reset": "cd server && npm run db:reset",
+    "blockchain:setup": "cd blockchain && npm run setup",
+    "blockchain:deploy": "cd blockchain && npm run deploy",
+    "services:start": "docker-compose up -d postgres redis kafka",
+    "services:stop": "docker-compose down",
+    "migration:create": "cd server && npm run migration:create",
+    "migration:run": "cd server && npm run migration:run",
+    "clean": "rm -rf node_modules && cd server && rm -rf node_modules && cd ../client && rm -rf node_modules",
+    "postinstall": "husky install"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KarapiroCartel/karapiro-cartel.git"
+  },
+  "keywords": [
+    "automotive",
+    "blockchain",
+    "hedera",
+    "crm",
+    "financial",
+    "compliance",
+    "new-zealand",
+    "performance",
+    "motorsport",
+    "parts-tracking",
+    "vehicle-management"
+  ],
+  "author": "Karapiro Cartel <info@karapirocartel.co.nz>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/KarapiroCartel/karapiro-cartel/issues"
+  },
+  "homepage": "https://karapirocartel.co.nz",
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.2.0"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

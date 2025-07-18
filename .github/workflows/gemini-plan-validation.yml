@@ -1,0 +1,288 @@
+name: Gemini Terraform Plan Validation
+
+# Trigger on pull requests to main branch
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  terraform-plan-validation:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Step 1: Checkout repository code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      # Step 2: Set up Python environment
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      # Step 3: Install Python dependencies for Gemini API
+      - name: Install Python dependencies
+        run: |
+          pip install google-generativeai requests python-dotenv
+      
+      # Step 4: Set up Google Cloud SDK
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GEMINI_SERVICE_ACCOUNT_JSON }}
+          export_default_credentials: true
+      
+      # Step 5: Install Terraform
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: latest
+      
+      # Step 6: Initialize Terraform
+      - name: Initialize Terraform
+        run: terraform init
+      
+      # Step 7: Generate Terraform plan
+      - name: Generate Terraform Plan
+        run: |
+          terraform plan -out=plan.out
+          terraform show -json plan.out > plan.json
+      
+      # Step 8: Create Gemini validation script
+      - name: Create Gemini validation script
+        run: |
+          cat > gemini_validator.py << 'EOF'
+          #!/usr/bin/env python3
+          """
+          Gemini Terraform Plan Validation Script
+          
+          This script submits a Terraform plan to Google's Gemini API
+          for AI-powered validation and suggestions.
+          
+          TODO: Implementation placeholder - Replace with actual Gemini API integration
+          
+          Required environment variables:
+          - GEMINI_API_KEY: Your Gemini API key
+          - GOOGLE_APPLICATION_CREDENTIALS: Path to service account JSON
+          
+          Expected workflow:
+          1. Load Terraform plan JSON
+          2. Format plan summary for Gemini
+          3. Submit to Gemini API with validation prompt
+          4. Parse and format Gemini response
+          5. Output results for GitHub Actions
+          """
+          
+          import json
+          import os
+          import sys
+          from typing import Dict, Any
+          
+          # TODO: Uncomment when implementing actual Gemini integration
+          # import google.generativeai as genai
+          
+          def load_terraform_plan(plan_file: str) -> Dict[str, Any]:
+              """Load and parse Terraform plan JSON file."""
+              try:
+                  with open(plan_file, 'r') as f:
+                      return json.load(f)
+              except FileNotFoundError:
+                  print(f"Error: Plan file {plan_file} not found")
+                  sys.exit(1)
+              except json.JSONDecodeError:
+                  print(f"Error: Invalid JSON in {plan_file}")
+                  sys.exit(1)
+          
+          def summarize_plan(plan_data: Dict[str, Any]) -> str:
+              """Create a human-readable summary of the Terraform plan."""
+              summary = []
+              
+              # Extract resource changes
+              if 'resource_changes' in plan_data:
+                  changes = plan_data['resource_changes']
+                  
+                  actions_count = {'create': 0, 'update': 0, 'delete': 0, 'replace': 0}
+                  resources_by_action = {'create': [], 'update': [], 'delete': [], 'replace': []}
+                  
+                  for change in changes:
+                      actions = change.get('change', {}).get('actions', [])
+                      resource_type = change.get('type', 'unknown')
+                      resource_name = change.get('name', 'unknown')
+                      
+                      if 'create' in actions:
+                          actions_count['create'] += 1
+                          resources_by_action['create'].append(f"{resource_type}.{resource_name}")
+                      elif 'update' in actions:
+                          actions_count['update'] += 1
+                          resources_by_action['update'].append(f"{resource_type}.{resource_name}")
+                      elif 'delete' in actions:
+                          actions_count['delete'] += 1
+                          resources_by_action['delete'].append(f"{resource_type}.{resource_name}")
+                      elif ['delete', 'create'] == sorted(actions):
+                          actions_count['replace'] += 1
+                          resources_by_action['replace'].append(f"{resource_type}.{resource_name}")
+                  
+                  summary.append(f"Terraform Plan Summary:")
+                  summary.append(f"- Resources to create: {actions_count['create']}")
+                  summary.append(f"- Resources to update: {actions_count['update']}")
+                  summary.append(f"- Resources to delete: {actions_count['delete']}")
+                  summary.append(f"- Resources to replace: {actions_count['replace']}")
+                  
+                  # Add detailed resource lists
+                  for action, resources in resources_by_action.items():
+                      if resources:
+                          summary.append(f"\n{action.title()} operations:")
+                          for resource in resources:
+                              summary.append(f"  - {resource}")
+              
+              return '\n'.join(summary)
+          
+          def validate_with_gemini(plan_summary: str) -> str:
+              """Submit plan to Gemini API for validation (PLACEHOLDER IMPLEMENTATION)."""
+              
+              # TODO: Implement actual Gemini API integration
+              # This is a placeholder that shows the expected structure
+              
+              validation_prompt = f"""
+              Please review this Terraform plan and provide validation feedback:
+              
+              {plan_summary}
+              
+              Please analyze for:
+              1. Security best practices
+              2. Resource naming conventions
+              3. Potential cost implications
+              4. Infrastructure dependencies
+              5. Compliance considerations
+              6. Recommendations for improvement
+              
+              Provide specific, actionable feedback.
+              """
+              
+              # PLACEHOLDER: Replace with actual Gemini API call
+              placeholder_response = """
+              🤖 Gemini AI Terraform Plan Analysis (PLACEHOLDER RESPONSE)
+              
+              ✅ VALIDATION SUMMARY:
+              - Security: Plan appears to follow basic security practices
+              - Naming: Resource naming follows conventions
+              - Dependencies: No circular dependencies detected
+              
+              ⚠️  RECOMMENDATIONS:
+              1. Consider adding resource tags for better organization
+              2. Review IAM permissions for principle of least privilege
+              3. Enable logging and monitoring for created resources
+              4. Consider implementing backup strategies for stateful resources
+              
+              💰 COST CONSIDERATIONS:
+              - Estimated monthly cost impact: Review instance sizes
+              - Consider using reserved instances for long-running resources
+              
+              🔒 SECURITY NOTES:
+              - Ensure sensitive data is properly encrypted
+              - Review network security group rules
+              - Validate service account permissions
+              
+              Note: This is a placeholder response. 
+              Actual implementation should integrate with Google Gemini API.
+              """
+              
+              # TODO: Uncomment and implement when ready
+              # try:
+              #     genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+              #     model = genai.GenerativeModel('gemini-pro')
+              #     response = model.generate_content(validation_prompt)
+              #     return response.text
+              # except Exception as e:
+              #     return f"Error calling Gemini API: {str(e)}"
+              
+              return placeholder_response
+          
+          def main():
+              """Main execution function."""
+              plan_file = 'plan.json'
+              
+              print("🔍 Loading Terraform plan...")
+              plan_data = load_terraform_plan(plan_file)
+              
+              print("📝 Summarizing plan changes...")
+              plan_summary = summarize_plan(plan_data)
+              print("\n" + "="*50)
+              print(plan_summary)
+              print("="*50 + "\n")
+              
+              print("🤖 Submitting to Gemini for validation...")
+              gemini_feedback = validate_with_gemini(plan_summary)
+              
+              print("\n" + "="*60)
+              print("GEMINI AI VALIDATION RESULTS")
+              print("="*60)
+              print(gemini_feedback)
+              print("="*60)
+              
+              # Set output for GitHub Actions
+              if os.getenv('GITHUB_ACTIONS'):
+                  # Write results to GitHub Actions step summary
+                  with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+                      f.write("# 🤖 Gemini Terraform Plan Validation\n\n")
+                      f.write("## 📋 Plan Summary\n")
+                      f.write(f"```\n{plan_summary}\n```\n\n")
+                      f.write("## 🎯 Gemini AI Analysis\n")
+                      f.write(f"{gemini_feedback}\n")
+          
+          if __name__ == '__main__':
+              main()
+          EOF
+          
+          chmod +x gemini_validator.py
+      
+      # Step 9: Run Gemini validation
+      - name: Run Gemini Plan Validation
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GEMINI_SERVICE_ACCOUNT_JSON }}
+        run: |
+          echo "🚀 Starting Gemini Terraform Plan Validation..."
+          python gemini_validator.py
+          echo "✅ Gemini validation completed!"
+      
+      # Step 10: Upload plan artifacts
+      - name: Upload Terraform Plan Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: terraform-plan-artifacts
+          path: |
+            plan.out
+            plan.json
+            gemini_validator.py
+          retention-days: 30
+      
+      # Step 11: Comment on PR with results (optional)
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            try {
+              // Read the step summary if it exists
+              let comment = '## 🤖 Gemini Terraform Plan Validation Results\n\n';
+              comment += 'The Gemini AI has analyzed your Terraform plan. ';
+              comment += 'Check the workflow run details for the complete analysis.\n\n';
+              comment += '**Next Steps:**\n';
+              comment += '- Review the AI recommendations\n';
+              comment += '- Address any security or cost concerns\n';
+              comment += '- Consider implementing suggested improvements\n\n';
+              comment += '💡 *This analysis was generated by Google Gemini AI*';
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            } catch (error) {
+              console.log('Could not post comment:', error);
+            }

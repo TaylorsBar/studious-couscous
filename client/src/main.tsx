@@ -1,3 +1,18 @@
+/**
+ * @file The main entry point for the Karapiro Cartel client application.
+ *
+ * This file is responsible for:
+ * 1. Creating the root React DOM node.
+ * 2. Setting up all necessary application-wide providers, including:
+ *    - React Router for navigation.
+ *    - React Query for data fetching and caching.
+ *    - Helmet for managing document head metadata.
+ *    - Hot Toast for notifications.
+ *    - React DnD for drag-and-drop functionality.
+ *    - Custom context providers for Authentication, Theming, Sockets, and Internationalization (i18n).
+ * 3. Rendering the main `App` component into the DOM.
+ * 4. Wrapping the application in an `ErrorBoundary` for graceful error handling.
+ */
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'

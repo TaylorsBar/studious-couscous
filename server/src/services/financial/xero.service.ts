@@ -1,7 +1,19 @@
+/**
+ * @file Provides a dedicated service for interacting with the Xero API.
+ *
+ * This service encapsulates all logic related to Xero integration, including OAuth 2.0
+ * authentication, token management, and synchronization of customers (as Contacts),
+ * orders (as Invoices), and payments. It also includes methods for fetching financial
+ * reports and creating expenses.
+ */
 import { XeroClient } from 'xero-node';
 import { prisma } from '../../config/database';
 import { logger } from '../../config/logger';
 
+/**
+ * @interface XeroConfig
+ * @description Defines the configuration required to initialize the XeroService.
+ */
 export interface XeroConfig {
   clientId: string;
   clientSecret: string;
@@ -10,6 +22,10 @@ export interface XeroConfig {
   tenantId?: string;
 }
 
+/**
+ * @interface XeroContact
+ * @description Defines the data structure for a Xero Contact.
+ */
 export interface XeroContact {
   ContactID?: string;
   Name: string;
@@ -33,6 +49,10 @@ export interface XeroContact {
   IsSupplier?: boolean;
 }
 
+/**
+ * @interface XeroInvoice
+ * @description Defines the data structure for a Xero Invoice.
+ */
 export interface XeroInvoice {
   InvoiceID?: string;
   Type: 'ACCPAY' | 'ACCREC';
@@ -60,6 +80,10 @@ export interface XeroInvoice {
   Total?: number;
 }
 
+/**
+ * @interface XeroPayment
+ * @description Defines the data structure for a Xero Payment.
+ */
 export interface XeroPayment {
   PaymentID?: string;
   Invoice: {
@@ -74,11 +98,19 @@ export interface XeroPayment {
   CurrencyRate?: number;
 }
 
+/**
+ * @class XeroService
+ * @description Manages all interactions with the Xero API, including authentication and data synchronization.
+ */
 export class XeroService {
   private xeroClient: XeroClient;
   private isConnected = false;
   private tokenSet: any;
 
+  /**
+   * @constructor
+   * @param {XeroConfig} config - The configuration for the Xero client.
+   */
   constructor(private config: XeroConfig) {
     this.xeroClient = new XeroClient({
       clientId: config.clientId,
@@ -90,7 +122,10 @@ export class XeroService {
   }
 
   /**
-   * Initialize Xero connection with stored tokens
+   * Initializes the Xero client by attempting to load a stored token set.
+   * This allows the service to maintain its connection across server restarts.
+   * @returns {Promise<void>}
+   * @throws Will throw an error if initialization fails.
    */
   async initialize(): Promise<void> {
     try {
@@ -111,14 +146,19 @@ export class XeroService {
   }
 
   /**
-   * Get authorization URL for OAuth flow
+   * Builds the consent URL required to initiate the OAuth 2.0 authorization flow with Xero.
+   * @returns {string} The Xero authorization URL.
    */
   getAuthorizationUrl(): string {
     return this.xeroClient.buildConsentUrl();
   }
 
   /**
-   * Handle OAuth callback and exchange code for tokens
+   * Handles the callback from the Xero OAuth 2.0 flow. It exchanges the authorization
+   * code for an access token and stores the token set.
+   * @param {string} code - The authorization code provided by Xero.
+   * @returns {Promise<void>}
+   * @throws Will throw an error if the callback handling fails.
    */
   async handleCallback(code: string): Promise<void> {
     try {
@@ -136,7 +176,11 @@ export class XeroService {
   }
 
   /**
-   * Refresh access token if needed
+   * Checks if the current access token is expired and, if so, refreshes it.
+   * This method should be called before making any API requests to Xero.
+   * @private
+   * @returns {Promise<void>}
+   * @throws Will throw an error if the token refresh fails.
    */
   private async refreshTokenIfNeeded(): Promise<void> {
     try {
@@ -158,7 +202,11 @@ export class XeroService {
   }
 
   /**
-   * Sync customer to Xero as Contact
+   * Synchronizes a user from the local database to Xero as a Contact.
+   * It creates a new contact or updates an existing one based on the user's `xeroId`.
+   * @param {string} userId - The ID of the user to synchronize.
+   * @returns {Promise<string>} The Xero Contact ID.
+   * @throws Will throw an error if the user is not found or the API call fails.
    */
   async syncCustomerToXero(userId: string): Promise<string> {
     try {
@@ -219,7 +267,11 @@ export class XeroService {
   }
 
   /**
-   * Create invoice in Xero from order
+   * Creates an invoice in Xero based on an order from the local database.
+   * It ensures the customer is synced first before creating the invoice.
+   * @param {string} orderId - The ID of the order to create an invoice for.
+   * @returns {Promise<string>} The Xero Invoice ID.
+   * @throws Will throw an error if the order is not found or the API call fails.
    */
   async createInvoiceFromOrder(orderId: string): Promise<string> {
     try {
@@ -303,7 +355,12 @@ export class XeroService {
   }
 
   /**
-   * Record payment in Xero
+   * Records a payment against an invoice in Xero.
+   * @param {string} orderId - The ID of the order associated with the invoice.
+   * @param {number} paymentAmount - The amount of the payment.
+   * @param {Date} paymentDate - The date of the payment.
+   * @returns {Promise<string>} The Xero Payment ID.
+   * @throws Will throw an error if the order/invoice is not found or the API call fails.
    */
   async recordPayment(orderId: string, paymentAmount: number, paymentDate: Date): Promise<string> {
     try {
@@ -355,7 +412,9 @@ export class XeroService {
   }
 
   /**
-   * Sync invoices from Xero to local database
+   * Fetches recent invoices from Xero and synchronizes them with the local database.
+   * @returns {Promise<void>}
+   * @throws Will throw an error if the API call fails.
    */
   async syncInvoicesFromXero(): Promise<void> {
     try {
@@ -392,7 +451,11 @@ export class XeroService {
   }
 
   /**
-   * Sync single invoice to database
+   * Synchronizes a single Xero invoice to the local database.
+   * It finds the corresponding customer and order and creates or updates the invoice record.
+   * @private
+   * @param {any} xeroInvoice - The invoice object from the Xero API.
+   * @returns {Promise<void>}
    */
   private async syncInvoiceToDatabase(xeroInvoice: any): Promise<void> {
     try {
@@ -443,7 +506,10 @@ export class XeroService {
   }
 
   /**
-   * Map Xero invoice status to local status
+   * Maps a Xero invoice status to the corresponding local application status.
+   * @private
+   * @param {string} xeroStatus - The status from the Xero API.
+   * @returns {string} The corresponding local status.
    */
   private mapXeroStatusToLocal(xeroStatus: string): string {
     const statusMap: { [key: string]: string } = {
@@ -458,7 +524,9 @@ export class XeroService {
   }
 
   /**
-   * Get financial reports from Xero
+   * Fetches standard financial reports (Profit & Loss, Balance Sheet, Cash Summary) from Xero.
+   * @returns {Promise<{ profitAndLoss: any; balanceSheet: any; cashflow: any; }>} An object containing the financial reports.
+   * @throws Will throw an error if fetching reports fails.
    */
   async getFinancialReports(): Promise<{
     profitAndLoss: any;
@@ -512,7 +580,8 @@ export class XeroService {
   }
 
   /**
-   * Test connection to Xero
+   * Tests the connection to Xero by fetching organization details.
+   * @returns {Promise<boolean>} True if the connection is successful, false otherwise.
    */
   async testConnection(): Promise<boolean> {
     try {
@@ -533,7 +602,9 @@ export class XeroService {
   }
 
   /**
-   * Get account balances
+   * Retrieves a list of all accounts and their balances from Xero.
+   * @returns {Promise<any[]>} An array of Xero account objects.
+   * @throws Will throw an error if the API call fails.
    */
   async getAccountBalances(): Promise<any[]> {
     try {
@@ -551,7 +622,13 @@ export class XeroService {
   }
 
   /**
-   * Create expense from supplier invoice
+   * Creates an expense in Xero from a supplier invoice.
+   * This creates an Accounts Payable (ACCPAY) invoice in Xero.
+   * @param {string} supplierId - The local ID of the supplier (user).
+   * @param {number} amount - The total amount of the expense.
+   * @param {string} description - A description of the expense.
+   * @returns {Promise<string>} The Xero ID of the created expense invoice.
+   * @throws Will throw an error if the supplier is not found or the API call fails.
    */
   async createExpense(supplierId: string, amount: number, description: string): Promise<string> {
     try {

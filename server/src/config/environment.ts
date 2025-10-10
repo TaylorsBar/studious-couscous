@@ -1,12 +1,24 @@
+/**
+ * @file Manages and validates the application's environment variables.
+ *
+ * This module uses `dotenv` to load environment variables from a `.env` file
+ * and `zod` to define a schema for validating them. The validated and structured
+ * configuration is then exported as a frozen `config` object to be used throughout the application.
+ */
 import dotenv from 'dotenv'
 import { z } from 'zod'
 
-// Load environment variables
+// Load environment variables from .env file
 dotenv.config()
 
-// Environment schema for validation
+/**
+ * @const {z.ZodObject} envSchema
+ * @description Defines the schema for environment variables using Zod.
+ * This ensures that all required environment variables are present and correctly typed.
+ * It also provides default values for optional variables.
+ */
 const envSchema = z.object({
-  // Node
+  // Node.js environment settings
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.string().transform(Number).default(3001),
 
@@ -102,10 +114,15 @@ const envSchema = z.object({
   ELLIPTIC_API_KEY: z.string().optional(),
 })
 
-// Validate environment variables
+// Validate environment variables against the schema
 const env = envSchema.parse(process.env)
 
-// Export configuration
+/**
+ * @const {object} config
+ * @description The main configuration object for the application.
+ * This object is structured by domain (e.g., server, database, jwt) and is exported
+ * as a read-only object to prevent accidental modifications at runtime.
+ */
 export const config = {
   node: {
     env: env.NODE_ENV,

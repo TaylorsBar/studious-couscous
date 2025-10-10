@@ -1,3 +1,10 @@
+/**
+ * @file Implements a comprehensive service for interacting with the Hedera Hashgraph network.
+ *
+ * This service manages the Hedera client and mirror node connections, handles the creation
+ * of Hedera Consensus Service (HCS) topics, and provides methods for submitting
+ * and verifying data related to parts, orders, and users on the blockchain.
+ */
 import {
   Client,
   PrivateKey,
@@ -27,6 +34,10 @@ import { logger } from '../../config/logger';
 import { HederaEventType, HederaTransactionStatus } from '@prisma/client';
 import { createHash } from 'crypto';
 
+/**
+ * @interface HederaConfig
+ * @description Defines the configuration required to initialize the HederaService.
+ */
 export interface HederaConfig {
   operatorId: string;
   operatorKey: string;
@@ -34,6 +45,10 @@ export interface HederaConfig {
   mirrorNodeUrl?: string;
 }
 
+/**
+ * @interface PartProvenanceData
+ * @description Defines the data structure for recording the provenance of an automotive part.
+ */
 export interface PartProvenanceData {
   partId: string;
   sku: string;
@@ -46,6 +61,10 @@ export interface PartProvenanceData {
   supplierInfo?: any;
 }
 
+/**
+ * @interface OrderAuditData
+ * @description Defines the data structure for creating an audit trail for an order.
+ */
 export interface OrderAuditData {
   orderId: string;
   customerId: string;
@@ -59,6 +78,10 @@ export interface OrderAuditData {
   timestamp: Date;
 }
 
+/**
+ * @interface UserVerificationData
+ * @description Defines the data structure for recording a user's verification status.
+ */
 export interface UserVerificationData {
   userId: string;
   businessType: string;
@@ -67,6 +90,10 @@ export interface UserVerificationData {
   verifiedAt: Date;
 }
 
+/**
+ * @class HederaService
+ * @description Provides a comprehensive service for all interactions with the Hedera network.
+ */
 export class HederaService {
   private client: Client;
   private mirrorClient: MirrorClient;
@@ -76,6 +103,11 @@ export class HederaService {
   private ordersTopicId?: TopicId;
   private usersTopicId?: TopicId;
 
+  /**
+   * @constructor
+   * @param {HederaConfig} config - The configuration object for the Hedera service.
+   * @description Initializes the Hedera client and mirror node client based on the provided configuration.
+   */
   constructor(config: HederaConfig) {
     this.operatorId = AccountId.fromString(config.operatorId);
     this.operatorKey = PrivateKey.fromString(config.operatorKey);
@@ -96,7 +128,10 @@ export class HederaService {
   }
 
   /**
-   * Initialize Hedera topics for different event types
+   * Initializes the Hedera Consensus Service (HCS) topics required by the application.
+   * This method creates topics for parts, orders, and users if they don't already exist.
+   * @returns {Promise<void>}
+   * @throws Will throw an error if topic initialization fails.
    */
   async initializeTopics(): Promise<void> {
     try {
@@ -117,7 +152,11 @@ export class HederaService {
   }
 
   /**
-   * Create a new Hedera topic
+   * Creates a new Hedera Consensus Service (HCS) topic with a given memo.
+   * @private
+   * @param {string} memo - The memo to associate with the topic.
+   * @returns {Promise<TopicId>} The ID of the newly created topic.
+   * @throws Will throw an error if topic creation fails.
    */
   private async createTopic(memo: string): Promise<TopicId> {
     try {
@@ -146,7 +185,12 @@ export class HederaService {
   }
 
   /**
-   * Record part provenance on Hedera
+   * Records part provenance data on the Hedera network.
+   * This method serializes the part data, submits it as a message to the parts topic,
+   * and updates the corresponding part record in the local database with the transaction ID.
+   * @param {PartProvenanceData} data - The provenance data for the part.
+   * @returns {Promise<string>} The Hedera transaction ID for the submitted message.
+   * @throws Will throw an error if the parts topic is not initialized or if the submission fails.
    */
   async recordPartProvenance(data: PartProvenanceData): Promise<string> {
     try {
@@ -191,7 +235,11 @@ export class HederaService {
   }
 
   /**
-   * Record order audit trail on Hedera
+   * Records an order audit trail on the Hedera network.
+   * This creates an immutable log of the order details at the time of creation.
+   * @param {OrderAuditData} data - The audit data for the order.
+   * @returns {Promise<string>} The Hedera transaction ID for the submitted message.
+   * @throws Will throw an error if the orders topic is not initialized or if the submission fails.
    */
   async recordOrderAudit(data: OrderAuditData): Promise<string> {
     try {
@@ -226,7 +274,11 @@ export class HederaService {
   }
 
   /**
-   * Record user verification on Hedera
+   * Records user verification data on the Hedera network.
+   * Sensitive document information is hashed before being included in the message.
+   * @param {UserVerificationData} data - The verification data for the user.
+   * @returns {Promise<string>} The Hedera transaction ID for the submitted message.
+   * @throws Will throw an error if the users topic is not initialized or if the submission fails.
    */
   async recordUserVerification(data: UserVerificationData): Promise<string> {
     try {
@@ -264,7 +316,14 @@ export class HederaService {
   }
 
   /**
-   * Submit a message to a Hedera topic
+   * Submits a message to a specified Hedera Consensus Service (HCS) topic.
+   * This is a generic internal method used by the public-facing recording methods.
+   * @private
+   * @param {TopicId} topicId - The ID of the topic to submit the message to.
+   * @param {string} message - The message content to submit, typically a JSON string.
+   * @param {HederaEventType} eventType - The type of event being submitted.
+   * @returns {Promise<string>} The transaction ID of the submission.
+   * @throws Will throw an error if the message submission fails.
    */
   private async submitMessage(
     topicId: TopicId,
@@ -312,7 +371,12 @@ export class HederaService {
   }
 
   /**
-   * Wait for consensus and update transaction status
+   * Subscribes to a Hedera topic using a mirror node to wait for a transaction to reach consensus.
+   * It updates the transaction's status in the local database upon consensus or failure.
+   * @private
+   * @param {string} transactionId - The ID of the transaction to monitor.
+   * @param {TopicId} topicId - The topic to subscribe to.
+   * @returns {Promise<void>}
    */
   private async waitForConsensus(
     transactionId: string,
@@ -349,7 +413,12 @@ export class HederaService {
   }
 
   /**
-   * Update transaction status in database
+   * Updates the status of a Hedera transaction in the local database.
+   * @private
+   * @param {string} transactionId - The ID of the transaction to update.
+   * @param {HederaTransactionStatus} status - The new status of the transaction.
+   * @param {Date} [consensusTimestamp] - The timestamp when consensus was reached.
+   * @returns {Promise<void>}
    */
   private async updateTransactionStatus(
     transactionId: string,
@@ -375,7 +444,9 @@ export class HederaService {
   }
 
   /**
-   * Verify part authenticity using Hedera
+   * Verifies the authenticity of a part by checking its corresponding Hedera transaction.
+   * @param {string} partId - The ID of the part to verify.
+   * @returns {Promise<{ isAuthentic: boolean; provenanceData?: any; verificationTimestamp?: Date; }>} An object indicating authenticity and providing provenance data if available.
    */
   async verifyPartAuthenticity(partId: string): Promise<{
     isAuthentic: boolean;
@@ -413,7 +484,11 @@ export class HederaService {
   }
 
   /**
-   * Get audit trail for an entity
+   * Retrieves the full audit trail for a specific entity (part, order, etc.) from the local database.
+   * @param {string} entityId - The ID of the entity.
+   * @param {string} entityType - The type of the entity.
+   * @returns {Promise<any[]>} An array of transaction records for the entity.
+   * @throws Will throw an error if the query fails.
    */
   async getAuditTrail(entityId: string, entityType: string): Promise<any[]> {
     try {
@@ -439,7 +514,10 @@ export class HederaService {
   }
 
   /**
-   * Create a hash of data for integrity verification
+   * Creates a SHA-256 hash of the given data for integrity verification.
+   * @private
+   * @param {any} data - The data to hash.
+   * @returns {string} The hexadecimal representation of the hash.
    */
   private createDataHash(data: any): string {
     const dataString = typeof data === 'string' ? data : JSON.stringify(data);
@@ -447,7 +525,10 @@ export class HederaService {
   }
 
   /**
-   * Extract entity ID from message
+   * Extracts the entity ID from a message payload.
+   * @private
+   * @param {string} message - The JSON string message.
+   * @returns {string} The extracted entity ID or 'unknown'.
    */
   private extractEntityId(message: string): string {
     try {
@@ -459,7 +540,10 @@ export class HederaService {
   }
 
   /**
-   * Extract entity type from message
+   * Extracts the entity type from a message payload.
+   * @private
+   * @param {string} message - The JSON string message.
+   * @returns {string} The extracted entity type or 'unknown'.
    */
   private extractEntityType(message: string): string {
     try {
@@ -474,7 +558,9 @@ export class HederaService {
   }
 
   /**
-   * Get account balance
+   * Retrieves the HBAR balance of the operator account.
+   * @returns {Promise<number>} The account balance in tinybars.
+   * @throws Will throw an error if the balance query fails.
    */
   async getAccountBalance(): Promise<number> {
     try {
@@ -490,7 +576,9 @@ export class HederaService {
   }
 
   /**
-   * Close the Hedera client
+   * Closes the connection to the Hedera client.
+   * This should be called during a graceful shutdown of the application.
+   * @returns {Promise<void>}
    */
   async close(): Promise<void> {
     await this.client.close();

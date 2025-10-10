@@ -141,20 +141,30 @@ A comprehensive, enterprise-grade automotive management platform built specifica
 - **Blockchain Explorer**: http://localhost:3002
 - **Admin Dashboard**: http://localhost:3001/admin
 
-## 🏗️ Architecture
+## 🏗️ Codebase Architecture
 
-### Microservices Architecture
+This project is a monorepo containing the frontend client and the backend server.
+
 ```
 karapiro-cartel/
-├── client/                    # React frontend
-├── server/                    # Core API server
-├── blockchain/               # Hedera integration service
-├── crm-service/             # CRM integration microservice
-├── financial-service/       # Financial integration service
-├── compliance-service/      # Regulatory compliance service
-├── notification-service/    # Real-time notifications
-├── analytics-service/       # Business intelligence
-└── gateway/                 # API gateway
+├── client/                    # React frontend application (Vite + TypeScript)
+│   ├── src/
+│   │   ├── components/        # Shared React components
+│   │   ├── contexts/          # Application-wide contexts (Auth, Theme, etc.)
+│   │   ├── hooks/             # Custom React hooks
+│   │   ├── pages/             # Top-level page components
+│   │   ├── services/          # API service clients
+│   │   └── App.tsx            # Main application component with routing
+├── server/                    # Node.js backend API (Express + TypeScript)
+│   ├── src/
+│   │   ├── config/            # Configuration files (database, environment, etc.)
+│   │   ├── controllers/       # Route handlers and business logic
+│   │   ├── middleware/        # Express middleware
+│   │   ├── routes/            # API route definitions
+│   │   ├── services/          # Business logic services (CRM, Hedera, etc.)
+│   │   └── index.ts           # Server entry point
+├── prisma/                    # Prisma schema and migration files
+└── package.json               # Root package file with workspace scripts
 ```
 
 ### Data Flow
@@ -201,19 +211,72 @@ Comprehensive API documentation with interactive examples:
 ## 🏁 Getting Started for Developers
 
 ### Development Environment
+
+There are two primary ways to run the application for development:
+
+**1. Using Docker (Recommended):**
+This method is the easiest way to get started as it orchestrates all the required services (PostgreSQL, Redis, etc.) for you.
+
 ```bash
-# Start development environment
+# Start all services in the background
+npm run docker:up
+
+# View logs for all services
+npm run docker:logs
+
+# Stop all services
+npm run docker:down
+```
+
+**2. Running Services Manually:**
+If you prefer not to use Docker, you can run the client and server directly. You will need to have PostgreSQL and Redis running on your local machine and configured in `server/.env`.
+
+```bash
+# In one terminal, start the development server
+cd server
 npm run dev
 
-# Run tests
-npm run test
-
-# Check code quality
-npm run lint
-
-# Build for production
-npm run build
+# In another terminal, start the development client
+cd client
+npm run dev
 ```
+
+### Common Development Scripts
+
+- `npm run test`: Run the test suites for both the client and server.
+- `npm run lint`: Lint the codebase to check for style and quality issues.
+- `npm run build`: Create a production-ready build for both client and server.
+
+### Generating Code Documentation
+
+This repository uses JSDoc comments to document the codebase. You can generate a browsable HTML version of this documentation.
+
+1.  **Install `typedoc`:**
+    If you haven't already, install TypeDoc as a development dependency in both workspaces.
+    ```bash
+    npm install --save-dev typedoc -w client -w server
+    ```
+
+2.  **Add Generation Scripts:**
+    Add the following scripts to the `scripts` section of `client/package.json` and `server/package.json`:
+
+    In `client/package.json`:
+    ```json
+    "docs:generate": "typedoc --out docs/technical src/main.tsx"
+    ```
+
+    In `server/package.json`:
+    ```json
+    "docs:generate": "typedoc --out docs/technical src/index.ts"
+    ```
+
+3.  **Run the Scripts:**
+    From the root directory, you can generate all documentation:
+    ```bash
+    cd client && npm run docs:generate
+    cd ../server && npm run docs:generate
+    ```
+    This will create a `docs/technical` directory in both the `client` and `server` folders containing the generated documentation.
 
 ### Contributing
 1. Fork the repository

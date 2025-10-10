@@ -24,7 +24,14 @@ const SettingsPage = React.lazy(() => import('./pages/settings/SettingsPage'))
 const ProfilePage = React.lazy(() => import('./pages/profile/ProfilePage'))
 const NotFoundPage = React.lazy(() => import('./pages/NotFoundPage'))
 
-// Protected Route component
+/**
+ * A higher-order component that protects routes from unauthenticated access.
+ * It checks the user's authentication status and redirects to the login page if they are not logged in.
+ *
+ * @param {object} props - The component props.
+ * @param {React.ReactNode} props.children - The child components to render if the user is authenticated.
+ * @returns {React.ReactElement} A loading spinner while checking auth, a redirect, or the children components.
+ */
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isLoading } = useAuth()
   
@@ -39,7 +46,14 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>
 }
 
-// Public Route component (redirect to dashboard if logged in)
+/**
+ * A higher-order component for public routes that should not be accessible to authenticated users (e.g., login, register).
+ * It redirects logged-in users to the dashboard.
+ *
+ * @param {object} props - The component props.
+ * @param {React.ReactNode} props.children - The child components to render if the user is not authenticated.
+ * @returns {React.ReactElement} A loading spinner while checking auth, a redirect, or the children components.
+ */
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isLoading } = useAuth()
   
@@ -54,6 +68,12 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <>{children}</>
 }
 
+/**
+ * The main application component.
+ * It sets up the application's routing, theme, and global metadata.
+ *
+ * @returns {React.ReactElement} The root element of the application.
+ */
 const App: React.FC = () => {
   const { theme } = useTheme()
   

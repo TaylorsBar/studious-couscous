@@ -1,3 +1,12 @@
+/**
+ * @file Controller for handling automotive parts management.
+ *
+ * This file contains all the Express handler functions for managing parts,
+ * including creating, retrieving, updating, and deleting parts (CRUD).
+ * It also includes handlers for searching, checking compatibility,
+ * and fetching analytics data for parts.
+ * All handlers are wrapped with `asyncHandler` to catch and forward errors.
+ */
 import { Request, Response } from 'express'
 import { prisma } from '@/config/database'
 import { logger } from '@/utils/logger'
@@ -8,7 +17,11 @@ import { crmSyncService } from '@/services/crmSyncService'
 import { publishEvent, KAFKA_TOPICS } from '@/config/kafka'
 import { z } from 'zod'
 
-// Validation schemas
+/**
+ * @const {z.ZodObject} createPartSchema
+ * @description Zod schema for validating the request body when creating a new part.
+ * Defines the required and optional fields for a part, including their types and constraints.
+ */
 const createPartSchema = z.object({
   sku: z.string().min(1, 'SKU is required'),
   name: z.string().min(1, 'Name is required'),
@@ -38,8 +51,19 @@ const createPartSchema = z.object({
   isActive: z.boolean().default(true),
 })
 
+/**
+ * @const {z.ZodObject} updatePartSchema
+ * @description Zod schema for validating the request body when updating a part.
+ * It uses the `createPartSchema` and makes all fields optional.
+ */
 const updatePartSchema = createPartSchema.partial()
 
+/**
+ * @const {z.ZodObject} searchPartsSchema
+ * @description Zod schema for validating the query parameters for searching and filtering parts.
+ * Defines fields for full-text search, filtering by category, price, and stock status,
+ * as well as sorting and pagination options.
+ */
 const searchPartsSchema = z.object({
   query: z.string().optional(),
   categoryId: z.string().uuid().optional(),
@@ -55,9 +79,14 @@ const searchPartsSchema = z.object({
 })
 
 /**
- * @desc    Get all parts with filtering, sorting, and pagination
+ * Retrieves a list of parts with advanced filtering, sorting, and pagination.
+ *
  * @route   GET /api/parts
  * @access  Public
+ * @param   {Request} req - The Express request object, containing query parameters validated by `searchPartsSchema`.
+ * @param   {Response} res - The Express response object.
+ * @returns {Response} A JSON response with the list of parts and pagination details.
+ * @throws  {AppError} If fetching parts fails.
  */
 export const getParts = asyncHandler(async (req: Request, res: Response) => {
   const validatedQuery = searchPartsSchema.parse(req.query)
@@ -158,9 +187,14 @@ export const getParts = asyncHandler(async (req: Request, res: Response) => {
 })
 
 /**
- * @desc    Get part by ID
+ * Retrieves a single part by its unique ID, including related data and blockchain transaction history.
+ *
  * @route   GET /api/parts/:id
  * @access  Public
+ * @param   {Request} req - The Express request object, containing the part ID in `req.params`.
+ * @param   {Response} res - The Express response object.
+ * @returns {Response} A JSON response with the detailed part data.
+ * @throws  {AppError} If the part is not found.
  */
 export const getPartById = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params
@@ -206,9 +240,14 @@ export const getPartById = asyncHandler(async (req: Request, res: Response) => {
 })
 
 /**
- * @desc    Create new part
+ * Creates a new automotive part, submits it for blockchain verification, and publishes a Kafka event.
+ *
  * @route   POST /api/parts
  * @access  Private (Admin/Manager)
+ * @param   {Request} req - The Express request object, containing part data validated by `createPartSchema`.
+ * @param   {Response} res - The Express response object.
+ * @returns {Response} A JSON response with the newly created part data.
+ * @throws  {AppError} If the user is not authenticated, the SKU already exists, or creation fails.
  */
 export const createPart = asyncHandler(async (req: Request, res: Response) => {
   const validatedData = createPartSchema.parse(req.body)
@@ -290,9 +329,14 @@ export const createPart = asyncHandler(async (req: Request, res: Response) => {
 })
 
 /**
- * @desc    Update part
+ * Updates an existing automotive part and publishes a Kafka event with the changes.
+ *
  * @route   PUT /api/parts/:id
  * @access  Private (Admin/Manager)
+ * @param   {Request} req - The Express request object, containing the part ID and update data.
+ * @param   {Response} res - The Express response object.
+ * @returns {Response} A JSON response with the updated part data.
+ * @throws  {AppError} If the part is not found, the new SKU conflicts with an existing one, or the update fails.
  */
 export const updatePart = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params
@@ -357,9 +401,15 @@ export const updatePart = asyncHandler(async (req: Request, res: Response) => {
 })
 
 /**
- * @desc    Delete part
+ * Deletes a part by marking it as inactive (soft delete).
+ * The part cannot be deleted if it has been associated with any orders.
+ *
  * @route   DELETE /api/parts/:id
  * @access  Private (Admin)
+ * @param   {Request} req - The Express request object, containing the part ID.
+ * @param   {Response} res - The Express response object.
+ * @returns {Response} A JSON response confirming successful deletion.
+ * @throws  {AppError} If the part is not found, has been ordered, or deletion fails.
  */
 export const deletePart = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params
@@ -399,9 +449,13 @@ export const deletePart = asyncHandler(async (req: Request, res: Response) => {
 })
 
 /**
- * @desc    Get part compatibility for a vehicle
+ * Retrieves a paginated list of parts that are compatible with a specific vehicle.
+ *
  * @route   GET /api/parts/compatibility/:vehicleId
  * @access  Public
+ * @param   {Request} req - The Express request object, containing the vehicle ID and pagination queries.
+ * @param   {Response} res - The Express response object.
+ * @returns {Response} A JSON response with the list of compatible parts and pagination details.
  */
 export const getPartCompatibility = asyncHandler(async (req: Request, res: Response) => {
   const { vehicleId } = req.params
@@ -460,9 +514,14 @@ export const getPartCompatibility = asyncHandler(async (req: Request, res: Respo
 })
 
 /**
- * @desc    Get high-performance parts (featured automotive parts)
+ * Retrieves a list of high-performance and featured automotive parts.
+ * This is a specialized endpoint for the KC Speedshop to showcase premium parts.
+ *
  * @route   GET /api/parts/high-performance
  * @access  Public
+ * @param   {Request} req - The Express request object, containing optional query filters.
+ * @param   {Response} res - The Express response object.
+ * @returns {Response} A JSON response with a list of high-performance parts.
  */
 export const getHighPerformanceParts = asyncHandler(async (req: Request, res: Response) => {
   const { category, minHorsepower, sortBy = 'horsepower' } = req.query
@@ -513,9 +572,14 @@ export const getHighPerformanceParts = asyncHandler(async (req: Request, res: Re
 })
 
 /**
- * @desc    Verify part authenticity via blockchain
+ * Verifies the authenticity of a part by checking its status on the Hedera blockchain.
+ *
  * @route   POST /api/parts/:id/verify
  * @access  Private
+ * @param   {Request} req - The Express request object, containing the part ID.
+ * @param   {Response} res - The Express response object.
+ * @returns {Response} A JSON response with the detailed verification status of the part.
+ * @throws  {AppError} If the part is not found or verification fails.
  */
 export const verifyPartAuthenticity = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params
@@ -563,9 +627,13 @@ export const verifyPartAuthenticity = asyncHandler(async (req: Request, res: Res
 })
 
 /**
- * @desc    Get part analytics for KC Speedshop dashboard
+ * Retrieves analytics data for automotive parts to be displayed on the KC Speedshop dashboard.
+ *
  * @route   GET /api/parts/analytics
  * @access  Private (Admin/Manager)
+ * @param   {Request} req - The Express request object, containing an optional time period query.
+ * @param   {Response} res - The Express response object.
+ * @returns {Response} A JSON response with aggregated analytics data.
  */
 export const getPartAnalytics = asyncHandler(async (req: Request, res: Response) => {
   const { period = '30d' } = req.query

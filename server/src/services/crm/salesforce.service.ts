@@ -1,8 +1,20 @@
+/**
+ * @file Provides a dedicated service for interacting with the Salesforce API.
+ *
+ * This service encapsulates all logic related to Salesforce integration, including
+ * authentication, data mapping, and synchronization of users (as Accounts/Contacts)
+ * and orders (as Opportunities). It also includes methods for pulling data from
+ * Salesforce and logging sync operations.
+ */
 import jsforce from 'jsforce';
 import { prisma } from '../../config/database';
 import { logger } from '../../config/logger';
 import { CrmSystem, CrmOperation, CrmSyncStatus } from '@prisma/client';
 
+/**
+ * @interface SalesforceConfig
+ * @description Defines the configuration required to initialize the SalesforceService.
+ */
 export interface SalesforceConfig {
   loginUrl: string;
   username: string;
@@ -12,6 +24,10 @@ export interface SalesforceConfig {
   clientSecret: string;
 }
 
+/**
+ * @interface SalesforceAccount
+ * @description Defines the data structure for a Salesforce Account, including custom fields for KC Speedshop.
+ */
 export interface SalesforceAccount {
   Id?: string;
   Name: string;
@@ -37,6 +53,10 @@ export interface SalesforceAccount {
   Total_Order_Value__c?: number;
 }
 
+/**
+ * @interface SalesforceOpportunity
+ * @description Defines the data structure for a Salesforce Opportunity, including custom fields for KC Speedshop.
+ */
 export interface SalesforceOpportunity {
   Id?: string;
   Name: string;
@@ -54,6 +74,10 @@ export interface SalesforceOpportunity {
   Expected_Completion__c?: Date;
 }
 
+/**
+ * @interface SalesforceContact
+ * @description Defines the data structure for a Salesforce Contact, including custom fields for KC Speedshop.
+ */
 export interface SalesforceContact {
   Id?: string;
   AccountId: string;
@@ -68,10 +92,18 @@ export interface SalesforceContact {
   Vehicle_Interests__c?: string;
 }
 
+/**
+ * @class SalesforceService
+ * @description Manages all interactions with the Salesforce API.
+ */
 export class SalesforceService {
   private conn: jsforce.Connection;
   private isConnected = false;
 
+  /**
+   * @constructor
+   * @param {SalesforceConfig} config - The configuration for the Salesforce connection.
+   */
   constructor(private config: SalesforceConfig) {
     this.conn = new jsforce.Connection({
       loginUrl: config.loginUrl,
@@ -80,7 +112,10 @@ export class SalesforceService {
   }
 
   /**
-   * Authenticate with Salesforce
+   * Authenticates with the Salesforce API using the provided credentials.
+   * Sets the `isConnected` flag upon successful authentication.
+   * @returns {Promise<void>}
+   * @throws Will throw an error if authentication fails.
    */
   async authenticate(): Promise<void> {
     try {
@@ -97,7 +132,11 @@ export class SalesforceService {
   }
 
   /**
-   * Sync user to Salesforce as Account and Contact
+   * Synchronizes a user from the local database to Salesforce.
+   * This involves creating or updating a Salesforce Account and an associated Contact.
+   * @param {string} userId - The ID of the user to synchronize.
+   * @returns {Promise<string>} The Salesforce ID of the created or updated Account.
+   * @throws Will throw an error if the user is not found or if the sync operation fails.
    */
   async syncUserToSalesforce(userId: string): Promise<string> {
     try {
@@ -203,7 +242,11 @@ export class SalesforceService {
   }
 
   /**
-   * Sync order to Salesforce as Opportunity
+   * Synchronizes an order from the local database to Salesforce as an Opportunity.
+   * If the associated customer is not yet in Salesforce, it will be synced first.
+   * @param {string} orderId - The ID of the order to synchronize.
+   * @returns {Promise<string>} The Salesforce ID of the created Opportunity.
+   * @throws Will throw an error if the order is not found or if the sync operation fails.
    */
   async syncOrderToSalesforce(orderId: string): Promise<string> {
     try {
@@ -276,7 +319,10 @@ export class SalesforceService {
   }
 
   /**
-   * Pull customer data from Salesforce
+   * Retrieves customer data (Account and related Contacts) from Salesforce.
+   * @param {string} salesforceId - The Salesforce ID of the Account to retrieve.
+   * @returns {Promise<any>} An object containing the Salesforce Account and Contact records.
+   * @throws Will throw an error if the data retrieval fails.
    */
   async pullCustomerFromSalesforce(salesforceId: string): Promise<any> {
     try {
@@ -300,7 +346,10 @@ export class SalesforceService {
   }
 
   /**
-   * Sync Salesforce data to local database
+   * Periodically synchronizes recently modified data from Salesforce to the local database.
+   * Fetches recently updated Accounts and Opportunities and syncs them.
+   * @returns {Promise<void>}
+   * @throws Will throw an error if the synchronization fails.
    */
   async syncFromSalesforce(): Promise<void> {
     try {
@@ -338,7 +387,11 @@ export class SalesforceService {
   }
 
   /**
-   * Sync Salesforce account to local database
+   * Synchronizes a single Salesforce Account to the local user database.
+   * It updates an existing user or creates a new one if the email does not already exist.
+   * @private
+   * @param {any} account - The Salesforce Account object.
+   * @returns {Promise<void>}
    */
   private async syncAccountToDatabase(account: any): Promise<void> {
     try {
@@ -410,7 +463,11 @@ export class SalesforceService {
   }
 
   /**
-   * Sync Salesforce opportunity to local database
+   * Synchronizes a single Salesforce Opportunity to the local order database.
+   * If a "Closed Won" opportunity corresponds to a new order, it creates an order record.
+   * @private
+   * @param {any} opportunity - The Salesforce Opportunity object.
+   * @returns {Promise<void>}
    */
   private async syncOpportunityToDatabase(opportunity: any): Promise<void> {
     try {
@@ -471,7 +528,10 @@ export class SalesforceService {
   }
 
   /**
-   * Map order status to Salesforce stage
+   * Maps an internal order status to the corresponding Salesforce Opportunity stage name.
+   * @private
+   * @param {string} status - The internal order status.
+   * @returns {string} The Salesforce stage name.
    */
   private mapOrderStatusToSalesforceStage(status: string): string {
     const stageMap: { [key: string]: string } = {
@@ -488,7 +548,15 @@ export class SalesforceService {
   }
 
   /**
-   * Log CRM sync operation
+   * Logs the result of a CRM synchronization operation to the database.
+   * @private
+   * @param {CrmOperation} operation - The type of operation (e.g., CREATE, SYNC).
+   * @param {string} entityType - The type of the entity being synced (e.g., user, order).
+   * @param {string} entityId - The local ID of the entity.
+   * @param {string | null} externalId - The external Salesforce ID of the entity.
+   * @param {CrmSyncStatus} status - The status of the operation (SUCCESS or FAILED).
+   * @param {string} [errorMessage] - An error message if the operation failed.
+   * @returns {Promise<void>}
    */
   private async logSyncOperation(
     operation: CrmOperation,
@@ -516,7 +584,9 @@ export class SalesforceService {
   }
 
   /**
-   * Get sync statistics
+   * Retrieves synchronization statistics from the database.
+   * @returns {Promise<{ totalSyncs: number; successfulSyncs: number; failedSyncs: number; lastSyncTime?: Date; }>} An object containing sync statistics.
+   * @throws Will throw an error if fetching stats fails.
    */
   async getSyncStats(): Promise<{
     totalSyncs: number;
@@ -562,7 +632,8 @@ export class SalesforceService {
   }
 
   /**
-   * Test connection to Salesforce
+   * Tests the connection to Salesforce by authenticating and retrieving the user identity.
+   * @returns {Promise<boolean>} True if the connection is successful, false otherwise.
    */
   async testConnection(): Promise<boolean> {
     try {

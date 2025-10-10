@@ -1,3 +1,11 @@
+/**
+ * @file Provides a gateway service for interacting with the Hedera Hashgraph network.
+ *
+ * This service encapsulates all the logic for connecting to the Hedera network,
+ * creating and managing topics on the Hedera Consensus Service (HCS),
+ * submitting events for part provenance and order verification, and querying
+ * transaction history.
+ */
 import { Client, PrivateKey, TopicCreateTransaction, TopicMessageSubmitTransaction, Hbar } from '@hashgraph/sdk'
 import { logger } from '@/utils/logger'
 import { config } from '@/config/environment'
@@ -5,6 +13,10 @@ import { prisma } from '@/config/database'
 import { kafkaProducer } from '@/config/kafka'
 import crypto from 'crypto'
 
+/**
+ * @interface HederaEvent
+ * @description A generic interface for events being sent to the Hedera network.
+ */
 interface HederaEvent {
   eventType: string
   entityId: string
@@ -13,6 +25,10 @@ interface HederaEvent {
   timestamp: Date
 }
 
+/**
+ * @interface PartProvenanceEvent
+ * @description Defines the structure for a part provenance event to be recorded on the blockchain.
+ */
 interface PartProvenanceEvent {
   partId: string
   sku: string
@@ -24,6 +40,10 @@ interface PartProvenanceEvent {
   timestamp: Date
 }
 
+/**
+ * @interface OrderVerificationEvent
+ * @description Defines the structure for an order verification event to be recorded on the blockchain.
+ */
 interface OrderVerificationEvent {
   orderId: string
   orderNumber: string
@@ -38,15 +58,28 @@ interface OrderVerificationEvent {
   timestamp: Date
 }
 
+/**
+ * @class HederaGatewayService
+ * @description Manages all interactions with the Hedera Hashgraph network.
+ */
 class HederaGatewayService {
   private client: Client
   private operatorKey: PrivateKey
   private topicIds: Map<string, string> = new Map()
 
+  /**
+   * @constructor
+   * @description Initializes the Hedera client upon instantiation.
+   */
   constructor() {
     this.initializeClient()
   }
 
+  /**
+   * Initializes the Hedera client with credentials from the environment configuration.
+   * @private
+   * @throws Will throw an error if the Hedera client fails to initialize.
+   */
   private initializeClient(): void {
     try {
       // Initialize Hedera client for testnet
@@ -74,7 +107,10 @@ class HederaGatewayService {
   }
 
   /**
-   * Create HCS topics for different event types
+   * Creates the necessary Hedera Consensus Service (HCS) topics for the application.
+   * This should be called during application startup.
+   * @returns {Promise<void>}
+   * @throws Will throw an error if topic creation fails.
    */
   async initializeTopics(): Promise<void> {
     try {
@@ -96,7 +132,12 @@ class HederaGatewayService {
   }
 
   /**
-   * Create a new HCS topic
+   * Creates a single new HCS topic.
+   * @private
+   * @param {string} name - The internal name for the topic.
+   * @param {string} memo - The public memo for the topic on the Hedera network.
+   * @returns {Promise<string>} The ID of the newly created topic.
+   * @throws Will throw an error if topic creation fails.
    */
   private async createTopic(name: string, memo: string): Promise<string> {
     try {
@@ -116,7 +157,12 @@ class HederaGatewayService {
   }
 
   /**
-   * Submit a part provenance event to Hedera
+   * Submits a part provenance event to the Hedera Consensus Service.
+   * This creates an immutable, verifiable record of a part's registration.
+   * On success, it updates the part's status in the local database and publishes a Kafka event.
+   * @param {PartProvenanceEvent} event - The part provenance data to submit.
+   * @returns {Promise<string>} The Hedera transaction ID.
+   * @throws Will throw an error if the submission fails.
    */
   async submitPartProvenance(event: PartProvenanceEvent): Promise<string> {
     try {
@@ -217,7 +263,11 @@ class HederaGatewayService {
   }
 
   /**
-   * Submit an order verification event to Hedera
+   * Submits an order verification event to the Hedera Consensus Service.
+   * This creates an immutable record of an order's details at the time of creation.
+   * @param {OrderVerificationEvent} event - The order verification data to submit.
+   * @returns {Promise<string>} The Hedera transaction ID.
+   * @throws Will throw an error if the submission fails.
    */
   async submitOrderVerification(event: OrderVerificationEvent): Promise<string> {
     try {
@@ -277,7 +327,14 @@ class HederaGatewayService {
   }
 
   /**
-   * Process HBAR payment
+   * Simulates the processing of a payment made in HBAR.
+   * Note: In a real-world scenario, payment submission would be client-side,
+   * and this service would only verify the transaction's consensus.
+   * @param {string} fromAccountId - The account ID of the sender.
+   * @param {string} toAccountId - The account ID of the recipient.
+   * @param {number} amount - The amount of HBAR transferred.
+   * @param {string} orderId - The ID of the order this payment is for.
+   * @returns {Promise<string>} A mock payment transaction ID.
    */
   async processHbarPayment(
     fromAccountId: string,
@@ -305,7 +362,10 @@ class HederaGatewayService {
   }
 
   /**
-   * Verify a Hedera transaction
+   * Verifies a Hedera transaction by checking its status in the local database.
+   * A more robust implementation would query a Hedera mirror node.
+   * @param {string} transactionId - The ID of the transaction to verify.
+   * @returns {Promise<boolean>} True if the transaction has reached consensus, false otherwise.
    */
   async verifyTransaction(transactionId: string): Promise<boolean> {
     try {
@@ -323,7 +383,10 @@ class HederaGatewayService {
   }
 
   /**
-   * Get transaction history for an entity
+   * Retrieves the recorded Hedera transaction history for a specific entity from the local database.
+   * @param {string} entityId - The ID of the entity (e.g., part ID, order ID).
+   * @param {string} entityType - The type of the entity (e.g., 'part', 'order').
+   * @returns {Promise<any[]>} A promise that resolves with an array of transaction records.
    */
   async getTransactionHistory(entityId: string, entityType: string) {
     try {
@@ -343,7 +406,11 @@ class HederaGatewayService {
   }
 
   /**
-   * Generate a hash for an event to ensure integrity
+   * Generates a SHA-256 hash of a given event object to ensure data integrity.
+   * The object is stringified with sorted keys to ensure a consistent hash.
+   * @private
+   * @param {any} event - The event object to hash.
+   * @returns {string} The resulting hexadecimal hash string.
    */
   private generateEventHash(event: any): string {
     const eventString = JSON.stringify(event, Object.keys(event).sort())
@@ -351,7 +418,9 @@ class HederaGatewayService {
   }
 
   /**
-   * Close the Hedera client connection
+   * Closes the connection to the Hedera client.
+   * This should be called during graceful shutdown of the application.
+   * @returns {Promise<void>}
    */
   async close(): Promise<void> {
     try {

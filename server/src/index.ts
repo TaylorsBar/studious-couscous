@@ -1,3 +1,10 @@
+/**
+ * @file The main entry point for the Karapiro Cartel server application.
+ *
+ * This file initializes and starts the Express server. It sets up middleware, routes,
+ * error handling, WebSocket connections, and cron jobs. It also handles graceful
+ * shutdown of the server and its database connections.
+ */
 import 'reflect-metadata'
 import 'express-async-errors'
 import express from 'express'
@@ -38,11 +45,21 @@ import analyticsRoutes from '@/routes/analyticsRoutes'
 import webhookRoutes from '@/routes/webhookRoutes'
 import healthRoutes from '@/routes/healthRoutes'
 
+/**
+ * @class App
+ * @description The main class for the Karapiro Cartel server application.
+ * This class encapsulates the Express application, HTTP server, and Socket.IO server.
+ * It handles the initialization of middleware, routes, error handling, WebSockets, and cron jobs.
+ */
 class App {
   public app: express.Application
   public server: http.Server
   public io: SocketIOServer
 
+  /**
+   * @constructor
+   * @description Initializes the Express application and its components.
+   */
   constructor() {
     this.app = express()
     this.server = http.createServer(this.app)
@@ -60,6 +77,12 @@ class App {
     this.initializeCronJobs()
   }
 
+  /**
+   * @private
+   * @function initializeMiddleware
+   * @description Sets up all the middleware for the Express application.
+   * This includes security headers, CORS, rate limiting, body parsing, session management, compression, and logging.
+   */
   private initializeMiddleware(): void {
     // Security middleware
     this.app.use(helmet({
@@ -140,6 +163,11 @@ class App {
     }
   }
 
+  /**
+   * @private
+   * @function initializeRoutes
+   * @description Configures the application's API routes.
+   */
   private initializeRoutes(): void {
     // Health check route
     this.app.use('/health', healthRoutes)
@@ -167,6 +195,12 @@ class App {
     })
   }
 
+  /**
+   * @private
+   * @function initializeErrorHandling
+   * @description Sets up the application's error handling middleware.
+   * This includes a 404 handler for not-found routes and a global error handler.
+   */
   private initializeErrorHandling(): void {
     // 404 handler
     this.app.use(notFoundHandler)
@@ -175,14 +209,30 @@ class App {
     this.app.use(errorHandler)
   }
 
+  /**
+   * @private
+   * @function initializeWebSocket
+   * @description Initializes the Socket.IO server and sets up event handlers.
+   */
   private initializeWebSocket(): void {
     setupWebSocket(this.io)
   }
 
+  /**
+   * @private
+   * @function initializeCronJobs
+   * @description Sets up scheduled tasks and cron jobs for the application.
+   */
   private initializeCronJobs(): void {
     setupCronJobs()
   }
 
+  /**
+   * @public
+   * @async
+   * @function start
+   * @description Starts the application server, connects to the database and Redis, and begins listening for requests.
+   */
   public async start(): Promise<void> {
     try {
       // Connect to database
@@ -205,6 +255,12 @@ class App {
     }
   }
 
+  /**
+   * @public
+   * @async
+   * @function stop
+   * @description Gracefully stops the application server and disconnects from the database and Redis.
+   */
   public async stop(): Promise<void> {
     try {
       // Close server

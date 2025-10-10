@@ -1,8 +1,19 @@
+/**
+ * @file Manages Kafka client, producer, consumer, and topic configurations.
+ *
+ * This module is responsible for initializing the connection to Kafka,
+ * creating a producer for sending messages, and providing a factory function
+ * for creating consumers. It also defines the Kafka topics used throughout the application.
+ */
 import { Kafka, Producer, Consumer, KafkaConfig } from 'kafkajs'
 import { config } from './environment'
 import { logger } from '@/utils/logger'
 
-// Kafka configuration
+/**
+ * @const {KafkaConfig} kafkaConfig
+ * @description The main configuration object for the Kafka client.
+ * It specifies the client ID, broker addresses, and retry policies.
+ */
 const kafkaConfig: KafkaConfig = {
   clientId: config.kafka.clientId,
   brokers: config.kafka.brokers,
@@ -13,17 +24,28 @@ const kafkaConfig: KafkaConfig = {
   logLevel: config.node.isDevelopment ? 2 : 1, // INFO in dev, WARN in prod
 }
 
-// Initialize Kafka client
+/**
+ * @const {Kafka} kafka
+ * @description The singleton Kafka client instance.
+ */
 export const kafka = new Kafka(kafkaConfig)
 
-// Initialize producer
+/**
+ * @const {Producer} kafkaProducer
+ * @description A singleton Kafka producer instance with idempotent configuration
+ * to ensure messages are written exactly once.
+ */
 export const kafkaProducer = kafka.producer({
   maxInFlightRequests: 1,
   idempotent: true,
   transactionTimeout: 30000,
 })
 
-// Initialize consumers for different services
+/**
+ * Creates a new Kafka consumer for a specified consumer group.
+ * @param {string} groupId - The ID of the consumer group this consumer should belong to.
+ * @returns {Consumer} A new Kafka consumer instance.
+ */
 export const createConsumer = (groupId: string): Consumer => {
   return kafka.consumer({
     groupId,
@@ -33,7 +55,11 @@ export const createConsumer = (groupId: string): Consumer => {
   })
 }
 
-// Topic names for the automotive platform
+/**
+ * @const {object} KAFKA_TOPICS
+ * @description An object containing all Kafka topic names used in the application.
+ * Using a central object for topic names helps prevent typos and ensures consistency.
+ */
 export const KAFKA_TOPICS = {
   // Parts management
   PARTS_REGISTERED: 'automotive.parts.registered',
@@ -73,7 +99,11 @@ export const KAFKA_TOPICS = {
   HEDERA_TRANSACTION_FAILED: 'automotive.hedera.transaction.failed',
 } as const
 
-// Initialize Kafka connections
+/**
+ * Initializes the Kafka producer and creates topics if they do not already exist.
+ * This function should be called during application startup.
+ * @returns {Promise<void>} A promise that resolves when Kafka is initialized.
+ */
 export const initializeKafka = async (): Promise<void> => {
   try {
     // Connect producer
@@ -108,7 +138,11 @@ export const initializeKafka = async (): Promise<void> => {
   }
 }
 
-// Gracefully shutdown Kafka connections
+/**
+ * Gracefully shuts down the Kafka producer connection.
+ * This function should be called during application shutdown.
+ * @returns {Promise<void>} A promise that resolves when the connection is closed.
+ */
 export const shutdownKafka = async (): Promise<void> => {
   try {
     await kafkaProducer.disconnect()
@@ -118,7 +152,14 @@ export const shutdownKafka = async (): Promise<void> => {
   }
 }
 
-// Helper function to publish events
+/**
+ * Publishes an event to a specified Kafka topic.
+ * @param {string} topic - The Kafka topic to publish the event to.
+ * @param {string} key - The key for the Kafka message, used for partitioning.
+ * @param {Record<string, any>} value - The event payload, which will be JSON-serialized.
+ * @param {Record<string, string>} [headers] - Optional headers for the Kafka message.
+ * @returns {Promise<void>} A promise that resolves when the event has been sent.
+ */
 export const publishEvent = async (
   topic: string,
   key: string,
@@ -143,7 +184,10 @@ export const publishEvent = async (
   }
 }
 
-// Event type definitions
+/**
+ * @interface BaseEvent
+ * @description Defines the common structure for all Kafka events in the system.
+ */
 export interface BaseEvent {
   eventId: string
   eventType: string
@@ -152,6 +196,10 @@ export interface BaseEvent {
   source: string
 }
 
+/**
+ * @interface PartRegisteredEvent
+ * @description Event published when a new automotive part is registered in the system.
+ */
 export interface PartRegisteredEvent extends BaseEvent {
   eventType: 'PART_REGISTERED'
   data: {
@@ -165,6 +213,10 @@ export interface PartRegisteredEvent extends BaseEvent {
   }
 }
 
+/**
+ * @interface OrderCreatedEvent
+ * @description Event published when a new order is created.
+ */
 export interface OrderCreatedEvent extends BaseEvent {
   eventType: 'ORDER_CREATED'
   data: {
@@ -177,6 +229,10 @@ export interface OrderCreatedEvent extends BaseEvent {
   }
 }
 
+/**
+ * @interface UserCreatedEvent
+ * @description Event published when a new user signs up.
+ */
 export interface UserCreatedEvent extends BaseEvent {
   eventType: 'USER_CREATED'
   data: {
@@ -189,6 +245,10 @@ export interface UserCreatedEvent extends BaseEvent {
   }
 }
 
+/**
+ * @interface CrmSyncRequestEvent
+ * @description Event published to request a synchronization operation with a CRM system.
+ */
 export interface CrmSyncRequestEvent extends BaseEvent {
   eventType: 'CRM_SYNC_REQUEST'
   data: {
@@ -200,6 +260,10 @@ export interface CrmSyncRequestEvent extends BaseEvent {
   }
 }
 
+/**
+ * @interface AmlCheckRequestEvent
+ * @description Event published to request an Anti-Money Laundering (AML) check for a transaction.
+ */
 export interface AmlCheckRequestEvent extends BaseEvent {
   eventType: 'AML_CHECK_REQUEST'
   data: {
@@ -211,7 +275,10 @@ export interface AmlCheckRequestEvent extends BaseEvent {
   }
 }
 
-// Type union for all events
+/**
+ * @type {KafkaEvent}
+ * @description A type union representing all possible Kafka events in the system.
+ */
 export type KafkaEvent = 
   | PartRegisteredEvent
   | OrderCreatedEvent

@@ -1,10 +1,20 @@
+/**
+ * @file Provides a gateway service for synchronizing financial data with external accounting systems.
+ *
+ * This service uses a generic adapter pattern to support multiple financial platforms (e.g., Xero, MYOB).
+ * It consumes Kafka events for orders, invoices, and payments, and translates them into API calls
+ * for the respective accounting systems. It also handles financial reconciliation.
+ */
 import { logger } from '@/utils/logger'
 import { config } from '@/config/environment'
 import { prisma } from '@/config/database'
 import { createConsumer, publishEvent, KAFKA_TOPICS } from '@/config/kafka'
 import { Consumer } from 'kafkajs'
 
-// Canonical financial data models
+/**
+ * @interface CanonicalInvoice
+ * @description A standardized data model for an invoice, abstracting away system-specific fields.
+ */
 interface CanonicalInvoice {
   platformInvoiceId: string
   invoiceNumber: string
@@ -27,6 +37,10 @@ interface CanonicalInvoice {
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
 }
 
+/**
+ * @interface CanonicalPayment
+ * @description A standardized data model for a payment, abstracting away system-specific fields.
+ */
 interface CanonicalPayment {
   platformPaymentId: string
   invoiceId: string
@@ -38,22 +52,45 @@ interface CanonicalPayment {
   gatewayTransactionId?: string
 }
 
-// Abstract Finance Adapter interface
+/**
+ * @abstract
+ * @class FinanceAdapter
+ * @description Defines the interface that all financial system adapters must implement.
+ * This ensures that the FinanceGatewayService can interact with any system in a consistent way.
+ */
 abstract class FinanceAdapter {
+  /** Connects to the financial system API. */
   abstract connect(): Promise<void>
+  /** Disconnects from the financial system API. */
   abstract disconnect(): Promise<void>
+  /** Creates a new invoice in the financial system. */
   abstract createInvoice(invoice: CanonicalInvoice): Promise<string>
+  /** Updates an existing invoice in the financial system. */
   abstract updateInvoice(externalId: string, invoice: CanonicalInvoice): Promise<void>
+  /** Records a payment against an invoice in the financial system. */
   abstract recordPayment(payment: CanonicalPayment): Promise<string>
+  /** Synchronizes a platform invoice's data with the financial system. */
   abstract syncInvoice(platformInvoiceId: string): Promise<void>
+  /** Retrieves reconciled transactions from the financial system for a given period. */
   abstract getReconciledTransactions(startDate: Date, endDate: Date): Promise<any[]>
 }
 
-// Xero Adapter
+/**
+ * @class XeroAdapter
+ * @extends FinanceAdapter
+ * @description Provides the concrete implementation for interacting with the Xero API.
+ * Note: This implementation is a mock and does not make real API calls.
+ */
 class XeroAdapter extends FinanceAdapter {
   private isConnected = false
   private accessToken?: string
 
+  /**
+   * Simulates a connection to the Xero API.
+   * In a real implementation, this would handle the OAuth2 flow.
+   * @returns {Promise<void>}
+   * @throws Will throw an error if credentials are not configured.
+   */
   async connect(): Promise<void> {
     try {
       if (!config.finance.xero.clientId || !config.finance.xero.clientSecret) {
@@ -70,12 +107,22 @@ class XeroAdapter extends FinanceAdapter {
     }
   }
 
+  /**
+   * Simulates a disconnection from the Xero API.
+   * @returns {Promise<void>}
+   */
   async disconnect(): Promise<void> {
     this.isConnected = false
     this.accessToken = undefined
     logger.info('Disconnected from Xero')
   }
 
+  /**
+   * Creates a new invoice in Xero.
+   * @param {CanonicalInvoice} invoice - The standardized invoice data.
+   * @returns {Promise<string>} The mock ID of the newly created Xero invoice.
+   * @throws Will throw an error if invoice creation fails.
+   */
   async createInvoice(invoice: CanonicalInvoice): Promise<string> {
     try {
       if (!this.isConnected) await this.connect()
@@ -113,6 +160,12 @@ class XeroAdapter extends FinanceAdapter {
     }
   }
 
+  /**
+   * Updates an existing invoice in Xero.
+   * @param {string} externalId - The Xero ID of the invoice to update.
+   * @param {CanonicalInvoice} invoice - The updated invoice data.
+   * @returns {Promise<void>}
+   */
   async updateInvoice(externalId: string, invoice: CanonicalInvoice): Promise<void> {
     try {
       if (!this.isConnected) await this.connect()
@@ -125,6 +178,12 @@ class XeroAdapter extends FinanceAdapter {
     }
   }
 
+  /**
+   * Records a payment against an invoice in Xero.
+   * @param {CanonicalPayment} payment - The standardized payment data.
+   * @returns {Promise<string>} The mock ID of the newly created Xero payment.
+   * @throws Will throw an error if payment recording fails.
+   */
   async recordPayment(payment: CanonicalPayment): Promise<string> {
     try {
       if (!this.isConnected) await this.connect()
@@ -151,6 +210,13 @@ class XeroAdapter extends FinanceAdapter {
     }
   }
 
+  /**
+   * Synchronizes an invoice from the local database to Xero.
+   * Creates a new invoice in Xero if it doesn't exist, otherwise updates it.
+   * @param {string} platformInvoiceId - The ID of the invoice on the local platform.
+   * @returns {Promise<void>}
+   * @throws Will throw an error if the invoice is not found or sync fails.
+   */
   async syncInvoice(platformInvoiceId: string): Promise<void> {
     try {
       const invoice = await prisma.invoice.findUnique({
@@ -218,6 +284,12 @@ class XeroAdapter extends FinanceAdapter {
     }
   }
 
+  /**
+   * Retrieves a mock list of reconciled transactions from Xero.
+   * @param {Date} startDate - The start date for the transaction period.
+   * @param {Date} endDate - The end date for the transaction period.
+   * @returns {Promise<any[]>} A promise that resolves with an array of mock transactions.
+   */
   async getReconciledTransactions(startDate: Date, endDate: Date): Promise<any[]> {
     try {
       if (!this.isConnected) await this.connect()
@@ -241,6 +313,12 @@ class XeroAdapter extends FinanceAdapter {
     }
   }
 
+  /**
+   * Maps an internal platform status to a Xero-compatible invoice status.
+   * @private
+   * @param {string} status - The internal status.
+   * @returns {string} The corresponding Xero status.
+   */
   private mapInvoiceStatus(status: string): string {
     const mapping: Record<string, string> = {
       'draft': 'DRAFT',
@@ -252,6 +330,12 @@ class XeroAdapter extends FinanceAdapter {
     return mapping[status] || 'DRAFT'
   }
 
+  /**
+   * Maps a Xero invoice status back to an internal platform status.
+   * @private
+   * @param {string} status - The Xero status.
+   * @returns {string} The corresponding internal status.
+   */
   private mapInternalStatus(status: string): 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled' {
     const mapping: Record<string, 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'> = {
       'DRAFT': 'draft',
@@ -264,6 +348,12 @@ class XeroAdapter extends FinanceAdapter {
     return mapping[status] || 'draft'
   }
 
+  /**
+   * Gets the appropriate Xero account code based on the payment method.
+   * @private
+   * @param {string} paymentMethod - The payment method used.
+   * @returns {string} The corresponding Xero account code.
+   */
   private getAccountCodeForPaymentMethod(paymentMethod: string): string {
     const mapping: Record<string, string> = {
       'credit_card': '091', // Credit card clearing account
@@ -275,10 +365,18 @@ class XeroAdapter extends FinanceAdapter {
   }
 }
 
-// MYOB Adapter
+/**
+ * @class MyobAdapter
+ * @extends FinanceAdapter
+ * @description Provides a mock implementation for interacting with the MYOB API.
+ */
 class MyobAdapter extends FinanceAdapter {
   private isConnected = false
 
+  /**
+   * Simulates a connection to the MYOB API.
+   * @returns {Promise<void>}
+   */
   async connect(): Promise<void> {
     try {
       if (!config.finance.myob.clientId || !config.finance.myob.clientSecret) {
@@ -294,11 +392,20 @@ class MyobAdapter extends FinanceAdapter {
     }
   }
 
+  /**
+   * Simulates a disconnection from the MYOB API.
+   * @returns {Promise<void>}
+   */
   async disconnect(): Promise<void> {
     this.isConnected = false
     logger.info('Disconnected from MYOB')
   }
 
+  /**
+   * Simulates creating a new invoice in MYOB.
+   * @param {CanonicalInvoice} invoice - The standardized invoice data.
+   * @returns {Promise<string>} The mock ID of the newly created MYOB invoice.
+   */
   async createInvoice(invoice: CanonicalInvoice): Promise<string> {
     try {
       if (!this.isConnected) await this.connect()
@@ -314,37 +421,68 @@ class MyobAdapter extends FinanceAdapter {
     }
   }
 
+  /**
+   * Simulates updating an invoice in MYOB.
+   * @param {string} externalId - The MYOB ID of the invoice.
+   * @param {CanonicalInvoice} invoice - The updated invoice data.
+   * @returns {Promise<void>}
+   */
   async updateInvoice(externalId: string, invoice: CanonicalInvoice): Promise<void> {
     logger.info(`Updated MYOB invoice: ${externalId}`)
   }
 
+  /**
+   * Simulates recording a payment in MYOB.
+   * @param {CanonicalPayment} payment - The standardized payment data.
+   * @returns {Promise<string>} The mock ID of the recorded payment.
+   */
   async recordPayment(payment: CanonicalPayment): Promise<string> {
     const mockPaymentId = `MYOB-PAY-${Date.now()}`
     logger.info(`Recorded MYOB payment: ${mockPaymentId}`)
     return mockPaymentId
   }
 
+  /**
+   * Simulates synchronizing an invoice with MYOB.
+   * @param {string} platformInvoiceId - The local platform's invoice ID.
+   * @returns {Promise<void>}
+   */
   async syncInvoice(platformInvoiceId: string): Promise<void> {
     logger.info(`Syncing invoice ${platformInvoiceId} with MYOB`)
   }
 
+  /**
+   * Returns an empty array for reconciled transactions as a mock response.
+   * @returns {Promise<any[]>} An empty array.
+   */
   async getReconciledTransactions(startDate: Date, endDate: Date): Promise<any[]> {
     return []
   }
 }
 
-// Main Finance Gateway Service
+/**
+ * @class FinanceGatewayService
+ * @description Orchestrates financial data synchronization between the platform and various accounting systems.
+ */
 class FinanceGatewayService {
   private adapters: Map<string, FinanceAdapter> = new Map()
   private consumer: Consumer
   private isRunning = false
 
+  /**
+   * @constructor
+   * @description Initializes the financial adapters and the Kafka consumer.
+   */
   constructor() {
     this.adapters.set('xero', new XeroAdapter())
     this.adapters.set('myob', new MyobAdapter())
     this.consumer = createConsumer('finance-gateway-service')
   }
 
+  /**
+   * Starts the finance gateway service, connecting to accounting systems and Kafka.
+   * @returns {Promise<void>}
+   */
   async start(): Promise<void> {
     try {
       // Connect to finance systems
@@ -390,6 +528,10 @@ class FinanceGatewayService {
     }
   }
 
+  /**
+   * Stops the finance gateway service.
+   * @returns {Promise<void>}
+   */
   async stop(): Promise<void> {
     try {
       this.isRunning = false
@@ -407,6 +549,13 @@ class FinanceGatewayService {
     }
   }
 
+  /**
+   * Handles incoming Kafka events for financial operations.
+   * @private
+   * @param {string} topic - The Kafka topic.
+   * @param {any} data - The event payload.
+   * @returns {Promise<void>}
+   */
   private async handleEvent(topic: string, data: any): Promise<void> {
     try {
       switch (topic) {
@@ -434,6 +583,12 @@ class FinanceGatewayService {
     }
   }
 
+  /**
+   * Handles the `ORDER_PAID` event by creating an invoice and publishing an `INVOICE_CREATED` event.
+   * @private
+   * @param {any} data - The event payload containing the order ID.
+   * @returns {Promise<void>}
+   */
   private async handleOrderPaid(data: any): Promise<void> {
     try {
       // Create invoice for paid order
@@ -486,6 +641,12 @@ class FinanceGatewayService {
     }
   }
 
+  /**
+   * Synchronizes a single invoice to all configured financial systems.
+   * @private
+   * @param {string} invoiceId - The ID of the invoice to sync.
+   * @returns {Promise<void>}
+   */
   private async syncInvoiceToAllSystems(invoiceId: string): Promise<void> {
     for (const [name, adapter] of this.adapters) {
       try {
@@ -497,6 +658,12 @@ class FinanceGatewayService {
     }
   }
 
+  /**
+   * Records a payment in all configured financial systems.
+   * @private
+   * @param {any} data - The payment data.
+   * @returns {Promise<void>}
+   */
   private async recordPaymentInAllSystems(data: any): Promise<void> {
     const payment: CanonicalPayment = {
       platformPaymentId: data.paymentId,
@@ -519,6 +686,12 @@ class FinanceGatewayService {
     }
   }
 
+  /**
+   * Handles a direct synchronization request for a specific financial system.
+   * @private
+   * @param {any} data - The sync request payload.
+   * @returns {Promise<void>}
+   */
   private async handleSyncRequest(data: any): Promise<void> {
     const adapter = this.adapters.get(data.targetSystem)
     if (!adapter) {
@@ -542,6 +715,10 @@ class FinanceGatewayService {
     }
   }
 
+  /**
+   * Starts a recurring job to perform financial reconciliation.
+   * @private
+   */
   private startReconciliationJob(): void {
     // Run reconciliation every hour
     setInterval(async () => {
@@ -555,6 +732,11 @@ class FinanceGatewayService {
     }, 60 * 60 * 1000) // 1 hour
   }
 
+  /**
+   * Performs the financial reconciliation process by fetching transactions from all adapters.
+   * @private
+   * @returns {Promise<void>}
+   */
   private async performReconciliation(): Promise<void> {
     const endDate = new Date()
     const startDate = new Date(endDate.getTime() - 24 * 60 * 60 * 1000) // 24 hours ago
@@ -577,6 +759,13 @@ class FinanceGatewayService {
     }
   }
 
+  /**
+   * Matches a single reconciled transaction with a platform record.
+   * @private
+   * @param {any} transaction - The transaction data from the financial system.
+   * @param {string} source - The name of the financial system.
+   * @returns {Promise<void>}
+   */
   private async matchTransaction(transaction: any, source: string): Promise<void> {
     try {
       // Extract reference from transaction
@@ -595,7 +784,12 @@ class FinanceGatewayService {
     }
   }
 
-  // Public methods for manual operations
+  /**
+   * Manually triggers an invoice synchronization.
+   * @param {string} invoiceId - The ID of the invoice to sync.
+   * @param {string} [targetSystem] - The specific financial system to sync with. If omitted, syncs to all.
+   * @returns {Promise<void>}
+   */
   async manualSync(invoiceId: string, targetSystem?: string): Promise<void> {
     if (targetSystem) {
       const adapter = this.adapters.get(targetSystem)
@@ -607,6 +801,12 @@ class FinanceGatewayService {
     }
   }
 
+  /**
+   * Generates a reconciliation report for a given time period.
+   * @param {Date} startDate - The start date for the report.
+   * @param {Date} endDate - The end date for the report.
+   * @returns {Promise<any>} A report object with reconciliation data.
+   */
   async getReconciliationReport(startDate: Date, endDate: Date): Promise<any> {
     const report = {
       period: { startDate, endDate },

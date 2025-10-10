@@ -121,6 +121,20 @@ const mockData = {
   ]
 };
 
+/**
+ * Renders the main dashboard for the Karapiro Cartel application.
+ *
+ * This component provides a comprehensive overview of the business, including:
+ * - Key Performance Indicators (KPIs) like revenue, projects, and inventory.
+ * - Charts for sales performance and top product categories.
+ * - A feed of recent activities and upcoming events.
+ * - System status for critical integrations like Hedera, CRM, and financial sync.
+ *
+ * The component uses mock data for demonstration purposes. In a production environment,
+ * this data would be fetched from the backend API.
+ *
+ * @returns {React.ReactElement} The rendered dashboard page.
+ */
 const Dashboard: React.FC = () => {
   const [timeRange, setTimeRange] = useState('7d');
   const [selectedMetric, setSelectedMetric] = useState('revenue');
@@ -149,6 +163,11 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  /**
+   * Returns Tailwind CSS classes for styling status indicators based on the status string.
+   * @param {string} status - The status identifier (e.g., 'completed', 'pending').
+   * @returns {string} A string of Tailwind CSS classes.
+   */
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'confirmed':
@@ -166,6 +185,11 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  /**
+   * Returns an icon component based on the activity type.
+   * @param {string} type - The activity type identifier (e.g., 'order', 'blockchain').
+   * @returns {React.ReactElement} An icon component from the lucide-react library.
+   */
   const getActivityIcon = (type: string) => {
     switch (type) {
       case 'order':
@@ -181,6 +205,11 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  /**
+   * Formats a number as New Zealand currency (NZD).
+   * @param {number} amount - The number to format.
+   * @returns {string} The formatted currency string.
+   */
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NZ', {
       style: 'currency',
@@ -189,6 +218,11 @@ const Dashboard: React.FC = () => {
     }).format(amount);
   };
 
+  /**
+   * Formats a number with standard New Zealand number formatting.
+   * @param {number} num - The number to format.
+   * @returns {string} The formatted number string.
+   */
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat('en-NZ').format(num);
   };

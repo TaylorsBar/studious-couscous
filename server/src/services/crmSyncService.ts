@@ -1,3 +1,10 @@
+/**
+ * @file Provides a service for synchronizing customer and support data with external CRM systems.
+ *
+ * This service uses a generic adapter pattern to support multiple CRM platforms (e.g., Salesforce, HubSpot).
+ * It consumes Kafka events for user and ticket updates and translates them into API calls for the respective CRMs.
+ * It also provides methods for handling inbound webhooks from CRMs.
+ */
 import { logger } from '@/utils/logger'
 import { config } from '@/config/environment'
 import { prisma } from '@/config/database'
@@ -6,7 +13,10 @@ import { Consumer } from 'kafkajs'
 import jsforce from 'jsforce'
 import { Client as HubSpotClient } from '@hubspot/api-client'
 
-// Canonical data models
+/**
+ * @interface CanonicalCustomer
+ * @description A standardized data model for a customer, used to abstract away CRM-specific fields.
+ */
 interface CanonicalCustomer {
   platformUserId: string
   firstName: string
@@ -19,6 +29,10 @@ interface CanonicalCustomer {
   lastSeen: Date
 }
 
+/**
+ * @interface CanonicalInteraction
+ * @description A standardized data model for a customer interaction.
+ */
 interface CanonicalInteraction {
   interactionId: string
   platformUserId: string
@@ -28,6 +42,10 @@ interface CanonicalInteraction {
   details: Record<string, any>
 }
 
+/**
+ * @interface CanonicalSupportTicket
+ * @description A standardized data model for a support ticket.
+ */
 interface CanonicalSupportTicket {
   ticketId: string
   platformUserId: string
@@ -45,24 +63,46 @@ interface CanonicalSupportTicket {
   }>
 }
 
-// Abstract CRM Adapter interface
+/**
+ * @abstract
+ * @class CrmAdapter
+ * @description Defines the interface that all CRM adapters must implement.
+ * This ensures that the CrmSyncService can interact with any CRM in a consistent way.
+ */
 abstract class CrmAdapter {
+  /** Connects to the CRM API. */
   abstract connect(): Promise<void>
+  /** Disconnects from the CRM API. */
   abstract disconnect(): Promise<void>
+  /** Creates a new contact in the CRM. */
   abstract createContact(customer: CanonicalCustomer): Promise<string>
+  /** Updates an existing contact in the CRM. */
   abstract updateContact(externalId: string, customer: CanonicalCustomer): Promise<void>
+  /** Deletes a contact from the CRM. */
   abstract deleteContact(externalId: string): Promise<void>
+  /** Creates a new support ticket in the CRM. */
   abstract createTicket(ticket: CanonicalSupportTicket): Promise<string>
+  /** Updates an existing support ticket in the CRM. */
   abstract updateTicket(externalId: string, ticket: CanonicalSupportTicket): Promise<void>
+  /** Synchronizes a platform user's data with the CRM. */
   abstract syncContact(platformUserId: string): Promise<void>
+  /** Handles inbound webhook notifications from the CRM. */
   abstract webhookHandler(payload: any): Promise<void>
 }
 
-// Salesforce Adapter
+/**
+ * @class SalesforceAdapter
+ * @extends CrmAdapter
+ * @description Provides the concrete implementation for interacting with the Salesforce API.
+ */
 class SalesforceAdapter extends CrmAdapter {
   private connection: jsforce.Connection
   private isConnected = false
 
+  /**
+   * @constructor
+   * @description Initializes the jsforce connection object.
+   */
   constructor() {
     super()
     this.connection = new jsforce.Connection({
@@ -71,6 +111,11 @@ class SalesforceAdapter extends CrmAdapter {
     })
   }
 
+  /**
+   * Connects to the Salesforce API using credentials from the environment configuration.
+   * @returns {Promise<void>} A promise that resolves upon successful connection.
+   * @throws Will throw an error if the connection fails.
+   */
   async connect(): Promise<void> {
     try {
       if (!config.crm.salesforce.clientId || !config.crm.salesforce.clientSecret) {
@@ -91,6 +136,10 @@ class SalesforceAdapter extends CrmAdapter {
     }
   }
 
+  /**
+   * Disconnects from the Salesforce API.
+   * @returns {Promise<void>}
+   */
   async disconnect(): Promise<void> {
     try {
       await this.connection.logout()
@@ -101,6 +150,12 @@ class SalesforceAdapter extends CrmAdapter {
     }
   }
 
+  /**
+   * Creates a new Contact in Salesforce from a canonical customer model.
+   * @param {CanonicalCustomer} customer - The standardized customer data.
+   * @returns {Promise<string>} The ID of the newly created Salesforce contact.
+   * @throws Will throw an error if contact creation fails.
+   */
   async createContact(customer: CanonicalCustomer): Promise<string> {
     try {
       if (!this.isConnected) await this.connect()
@@ -134,6 +189,13 @@ class SalesforceAdapter extends CrmAdapter {
     }
   }
 
+  /**
+   * Updates an existing Contact in Salesforce.
+   * @param {string} externalId - The Salesforce ID of the contact to update.
+   * @param {CanonicalCustomer} customer - The updated customer data.
+   * @returns {Promise<void>}
+   * @throws Will throw an error if the update fails.
+   */
   async updateContact(externalId: string, customer: CanonicalCustomer): Promise<void> {
     try {
       if (!this.isConnected) await this.connect()
@@ -159,6 +221,12 @@ class SalesforceAdapter extends CrmAdapter {
     }
   }
 
+  /**
+   * Deletes a Contact from Salesforce.
+   * @param {string} externalId - The Salesforce ID of the contact to delete.
+   * @returns {Promise<void>}
+   * @throws Will throw an error if the deletion fails.
+   */
   async deleteContact(externalId: string): Promise<void> {
     try {
       if (!this.isConnected) await this.connect()
@@ -171,6 +239,12 @@ class SalesforceAdapter extends CrmAdapter {
     }
   }
 
+  /**
+   * Creates a new Case (support ticket) in Salesforce.
+   * @param {CanonicalSupportTicket} ticket - The standardized ticket data.
+   * @returns {Promise<string>} The ID of the newly created Salesforce case.
+   * @throws Will throw an error if case creation fails.
+   */
   async createTicket(ticket: CanonicalSupportTicket): Promise<string> {
     try {
       if (!this.isConnected) await this.connect()
@@ -207,6 +281,13 @@ class SalesforceAdapter extends CrmAdapter {
     }
   }
 
+  /**
+   * Updates an existing Case in Salesforce.
+   * @param {string} externalId - The Salesforce ID of the case to update.
+   * @param {CanonicalSupportTicket} ticket - The updated ticket data.
+   * @returns {Promise<void>}
+   * @throws Will throw an error if the update fails.
+   */
   async updateTicket(externalId: string, ticket: CanonicalSupportTicket): Promise<void> {
     try {
       if (!this.isConnected) await this.connect()
@@ -230,6 +311,13 @@ class SalesforceAdapter extends CrmAdapter {
     }
   }
 
+  /**
+   * Synchronizes a user from the local platform database to Salesforce.
+   * It creates a new contact if one doesn't exist or updates the existing one.
+   * @param {string} platformUserId - The ID of the user on the local platform.
+   * @returns {Promise<void>}
+   * @throws Will throw an error if the user is not found or the sync operation fails.
+   */
   async syncContact(platformUserId: string): Promise<void> {
     try {
       const user = await prisma.user.findUnique({
@@ -303,6 +391,12 @@ class SalesforceAdapter extends CrmAdapter {
     }
   }
 
+  /**
+   * Handles inbound webhook notifications from Salesforce.
+   * It parses the payload and publishes a Kafka event to trigger updates in the local system.
+   * @param {any} payload - The webhook payload from Salesforce.
+   * @returns {Promise<void>}
+   */
   async webhookHandler(payload: any): Promise<void> {
     try {
       // Handle Salesforce webhook notifications
@@ -329,6 +423,12 @@ class SalesforceAdapter extends CrmAdapter {
     }
   }
 
+  /**
+   * Maps a platform business type to a Salesforce-compatible account type.
+   * @private
+   * @param {string} businessType - The business type from the local platform.
+   * @returns {string} The corresponding Salesforce account type.
+   */
   private mapBusinessType(businessType: string): string {
     const mapping: Record<string, string> = {
       CUSTOMER: 'Customer',
@@ -340,6 +440,12 @@ class SalesforceAdapter extends CrmAdapter {
     return mapping[businessType] || 'Customer'
   }
 
+  /**
+   * Maps a platform ticket status to a Salesforce-compatible case status.
+   * @private
+   * @param {string} status - The ticket status from the local platform.
+   * @returns {string} The corresponding Salesforce case status.
+   */
   private mapTicketStatus(status: string): string {
     const mapping: Record<string, string> = {
       'Open': 'New',
@@ -352,11 +458,19 @@ class SalesforceAdapter extends CrmAdapter {
   }
 }
 
-// HubSpot Adapter
+/**
+ * @class HubSpotAdapter
+ * @extends CrmAdapter
+ * @description Provides the concrete implementation for interacting with the HubSpot API.
+ */
 class HubSpotAdapter extends CrmAdapter {
   private client: HubSpotClient
   private isConnected = false
 
+  /**
+   * @constructor
+   * @description Initializes the HubSpot API client.
+   */
   constructor() {
     super()
     this.client = new HubSpotClient({
@@ -364,6 +478,11 @@ class HubSpotAdapter extends CrmAdapter {
     })
   }
 
+  /**
+   * Connects to the HubSpot API by making a test request.
+   * @returns {Promise<void>}
+   * @throws Will throw an error if the connection fails.
+   */
   async connect(): Promise<void> {
     try {
       if (!config.crm.hubspot.apiKey) {
@@ -380,11 +499,21 @@ class HubSpotAdapter extends CrmAdapter {
     }
   }
 
+  /**
+   * Disconnects from the HubSpot API (no-op for this adapter).
+   * @returns {Promise<void>}
+   */
   async disconnect(): Promise<void> {
     this.isConnected = false
     logger.info('Disconnected from HubSpot')
   }
 
+  /**
+   * Creates a new contact in HubSpot.
+   * @param {CanonicalCustomer} customer - The standardized customer data.
+   * @returns {Promise<string>} The ID of the newly created HubSpot contact.
+   * @throws Will throw an error if contact creation fails.
+   */
   async createContact(customer: CanonicalCustomer): Promise<string> {
     try {
       const contactData = {
@@ -413,6 +542,13 @@ class HubSpotAdapter extends CrmAdapter {
     }
   }
 
+  /**
+   * Updates an existing contact in HubSpot.
+   * @param {string} externalId - The HubSpot ID of the contact to update.
+   * @param {CanonicalCustomer} customer - The updated customer data.
+   * @returns {Promise<void>}
+   * @throws Will throw an error if the update fails.
+   */
   async updateContact(externalId: string, customer: CanonicalCustomer): Promise<void> {
     try {
       const updateData = {
@@ -435,6 +571,12 @@ class HubSpotAdapter extends CrmAdapter {
     }
   }
 
+  /**
+   * Archives a contact in HubSpot (soft delete).
+   * @param {string} externalId - The HubSpot ID of the contact to archive.
+   * @returns {Promise<void>}
+   * @throws Will throw an error if archiving fails.
+   */
   async deleteContact(externalId: string): Promise<void> {
     try {
       await this.client.crm.contacts.basicApi.archive(externalId)
@@ -445,6 +587,12 @@ class HubSpotAdapter extends CrmAdapter {
     }
   }
 
+  /**
+   * Creates a new support ticket in HubSpot.
+   * @param {CanonicalSupportTicket} ticket - The standardized ticket data.
+   * @returns {Promise<string>} The ID of the newly created HubSpot ticket.
+   * @throws Will throw an error if ticket creation fails.
+   */
   async createTicket(ticket: CanonicalSupportTicket): Promise<string> {
     try {
       // Find the contact by platform user ID
@@ -493,6 +641,13 @@ class HubSpotAdapter extends CrmAdapter {
     }
   }
 
+  /**
+   * Updates an existing ticket in HubSpot.
+   * @param {string} externalId - The HubSpot ID of the ticket to update.
+   * @param {CanonicalSupportTicket} ticket - The updated ticket data.
+   * @returns {Promise<void>}
+   * @throws Will throw an error if the update fails.
+   */
   async updateTicket(externalId: string, ticket: CanonicalSupportTicket): Promise<void> {
     try {
       const updateData = {
@@ -512,12 +667,22 @@ class HubSpotAdapter extends CrmAdapter {
     }
   }
 
+  /**
+   * Synchronizes a user from the local platform database to HubSpot.
+   * @param {string} platformUserId - The ID of the user on the local platform.
+   * @returns {Promise<void>}
+   */
   async syncContact(platformUserId: string): Promise<void> {
     // Similar implementation to Salesforce adapter
     // Implementation details omitted for brevity
     logger.info(`Syncing contact ${platformUserId} with HubSpot`)
   }
 
+  /**
+   * Handles inbound webhook notifications from HubSpot.
+   * @param {any} payload - The webhook payload from HubSpot.
+   * @returns {Promise<void>}
+   */
   async webhookHandler(payload: any): Promise<void> {
     try {
       logger.info('Received HubSpot webhook:', payload)
@@ -527,6 +692,12 @@ class HubSpotAdapter extends CrmAdapter {
     }
   }
 
+  /**
+   * Maps a platform business type to a HubSpot-compatible lifecycle stage.
+   * @private
+   * @param {string} businessType - The business type from the local platform.
+   * @returns {string} The corresponding HubSpot lifecycle stage.
+   */
   private mapBusinessType(businessType: string): string {
     const mapping: Record<string, string> = {
       CUSTOMER: 'customer',
@@ -538,6 +709,12 @@ class HubSpotAdapter extends CrmAdapter {
     return mapping[businessType] || 'customer'
   }
 
+  /**
+   * Maps a platform ticket status to a HubSpot-compatible pipeline stage ID.
+   * @private
+   * @param {string} status - The ticket status from the local platform.
+   * @returns {string} The corresponding HubSpot pipeline stage ID.
+   */
   private mapTicketStatus(status: string): string {
     const mapping: Record<string, string> = {
       'Open': '1',
@@ -550,12 +727,20 @@ class HubSpotAdapter extends CrmAdapter {
   }
 }
 
-// Main CRM Sync Service
+/**
+ * @class CrmSyncService
+ * @description Orchestrates the synchronization of data between the platform and various CRM systems.
+ * It manages a collection of CRM adapters and a Kafka consumer to process events.
+ */
 class CrmSyncService {
   private adapters: Map<string, CrmAdapter> = new Map()
   private consumer: Consumer
   private isRunning = false
 
+  /**
+   * @constructor
+   * @description Initializes the CRM adapters and the Kafka consumer.
+   */
   constructor() {
     // Initialize adapters
     this.adapters.set('salesforce', new SalesforceAdapter())
@@ -565,6 +750,12 @@ class CrmSyncService {
     this.consumer = createConsumer('crm-sync-service')
   }
 
+  /**
+   * Starts the CRM synchronization service. This includes connecting to all configured
+   * CRM systems and starting the Kafka consumer to listen for relevant events.
+   * @returns {Promise<void>}
+   * @throws Will throw an error if the service fails to start.
+   */
   async start(): Promise<void> {
     try {
       // Connect to all CRM systems
@@ -607,6 +798,10 @@ class CrmSyncService {
     }
   }
 
+  /**
+   * Stops the CRM synchronization service, disconnecting from Kafka and all CRM systems.
+   * @returns {Promise<void>}
+   */
   async stop(): Promise<void> {
     try {
       this.isRunning = false
@@ -626,6 +821,13 @@ class CrmSyncService {
     }
   }
 
+  /**
+   * Handles incoming Kafka events by routing them to the appropriate handler function based on the topic.
+   * @private
+   * @param {string} topic - The Kafka topic of the message.
+   * @param {any} data - The event payload.
+   * @returns {Promise<void>}
+   */
   private async handleEvent(topic: string, data: any): Promise<void> {
     try {
       switch (topic) {
@@ -650,6 +852,12 @@ class CrmSyncService {
     }
   }
 
+  /**
+   * Synchronizes a user's data to all configured CRM systems.
+   * @private
+   * @param {string} userId - The ID of the user to sync.
+   * @returns {Promise<void>}
+   */
   private async syncUserToAllCrms(userId: string): Promise<void> {
     for (const [name, adapter] of this.adapters) {
       try {
@@ -661,11 +869,23 @@ class CrmSyncService {
     }
   }
 
+  /**
+   * Synchronizes a support ticket's data to all configured CRM systems.
+   * @private
+   * @param {string} ticketId - The ID of the ticket to sync.
+   * @returns {Promise<void>}
+   */
   private async syncTicketToAllCrms(ticketId: string): Promise<void> {
     // Implementation for syncing support tickets
     logger.info(`Syncing ticket ${ticketId} to all CRMs`)
   }
 
+  /**
+   * Handles a direct synchronization request for a specific CRM.
+   * @private
+   * @param {any} data - The sync request payload.
+   * @returns {Promise<void>}
+   */
   private async handleSyncRequest(data: any): Promise<void> {
     const adapter = this.adapters.get(data.targetCrm)
     if (!adapter) {
@@ -692,12 +912,21 @@ class CrmSyncService {
     }
   }
 
-  // Webhook endpoints for inbound data
+  /**
+   * Public method to handle inbound webhooks from Salesforce.
+   * @param {any} payload - The webhook payload.
+   * @returns {Promise<void>}
+   */
   async handleSalesforceWebhook(payload: any): Promise<void> {
     const adapter = this.adapters.get('salesforce') as SalesforceAdapter
     await adapter.webhookHandler(payload)
   }
 
+  /**
+   * Public method to handle inbound webhooks from HubSpot.
+   * @param {any} payload - The webhook payload.
+   * @returns {Promise<void>}
+   */
   async handleHubSpotWebhook(payload: any): Promise<void> {
     const adapter = this.adapters.get('hubspot') as HubSpotAdapter
     await adapter.webhookHandler(payload)
